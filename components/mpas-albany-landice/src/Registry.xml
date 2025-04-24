@@ -492,7 +492,7 @@
 				  description="Depth above which to iceberg meltwater is important. If config_TF_param_type is set to 'AMberg' or 'AMfit', water above this depth will be altered to follow the submarine meltwater mixing line. Default value is taken from Hager et al. (2024)."
 				  possible_values="Any negative real value"
 		/>
-		<nml_option name="config_ocean_data_extrap_ncells_extra" type="integer" default_value="10" units="unitless"
+		<nml_option name="config_ocean_data_extrap_ncells_extra" type="integer" default_value="2" units="unitless"
 			    description="number of extra cells for over-extrapolation into grounded ice" possible_values="any non-negative value"
                 />
                 <nml_option name="config_invalid_value_TF" type="real" default_value="1.0e36" units="unitless"
@@ -966,6 +966,8 @@
 			<var name="growOceanMaskHoriz" packages="extrapOceanData" />
                         <var name="seedOceanMaskHoriz" packages="extrapOceanData" />
                         <var name="icebergFjordMask" packages="extrapOceanData"/>
+                        <var name="MPAS_3dOceanTemperature" packages="extrapOceanData"/>
+                        <var name="MPAS_3dOceanSalinity" packages="extrapOceanData"/>
 		</stream>
 
 
@@ -1795,22 +1797,10 @@ is the value of that variable from the *previous* time level!
                 />
                 <var name="icebergFjordMask" type="integer" dimensions="nCells Time" units="none" default_value="0"
                         description="Binary mask depicting where to parameterize iceberg melt-driven cooling if using config_TF_param_type = AMfit. 1 prescribes AMberg at that cell, 0 prescribed AMmelt."
-                />
-                <var name="connectedMarineMask" type="integer" dimensions="nCells Time" units="none"
-                        description="for debugging"
-                />
-                    
-                <var name="altConnectedMarineMask" type="integer" dimensions="nCells Time" units="none"
-                        description="for debugging"
-                />
-
-                <var name="origGrowMask" type="integer" dimensions="nCells Time" units="none"
-                        description="for debugging"
-                />
-
-                <var name="altGrowMask" type="integer" dimensions="nCells Time" units="none"
-                        description="for debugging"
-                />
+					 />
+					 <var name="oceanField" type="real" dimensions="TWO nISMIP6OceanLayers nCells Time" units="none"
+								descriptions="Generic field used to extrapolate either ocean temperature and salinity, or thermal forcing. This field gets updated on each iteration of the extrapolation scheme. At end of extrapolation, those fields are set equal to oceanField. oceanField thus does not normally need to be output."
+					 />
         </var_struct>
 <!-- ================ -->
 
@@ -1891,11 +1881,11 @@ is the value of that variable from the *previous* time level!
        <var name="seedMask" type="integer" dimensions="nCells"
 	       description="seed mask for flood fill"
 	       persistence="scratch"
-               />
+          />
        <var name="growMask" type="integer" dimensions="nCells" units="none"
                description="grow mask for flood fill"
                persistence="scratch"
-               />
+          />
 	</var_struct>
 
 <!-- ================ -->
