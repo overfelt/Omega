@@ -95,7 +95,7 @@ contains
       logical, pointer :: config_ocean_data_extrapolation
       real(kind=RKIND), pointer :: invalid_value_TF
       logical, pointer :: config_recalculate_thermal_forcing
-      character (len=StrKIND), pointer :: config_TF_param_type
+      logical, pointer :: config_extrap_sill_blocking
       real(kind=RKIND), pointer :: config_sea_level
       type (block_type), pointer :: block
       type (mpas_pool_type), pointer :: scratchPool, geometryPool, meshPool, extrapOceanDataPool
@@ -106,7 +106,7 @@ contains
       integer, dimension(:,:), pointer :: orig3dOceanMask
       integer, dimension(:,:), pointer :: validOceanMask, validOceanMaskOrig, availOceanMask !masks to pass to flood-fill routine
       integer, dimension(:), pointer :: seedOceanMaskHoriz, growOceanMaskHoriz
-      real (kind=RKIND), dimension(:,:), pointer :: MPAS_3dOceanSalinity, MPAS_3dOceanTemperature
+      real (kind=RKIND), dimension(:,:), pointer :: oceanSalinity, oceanTemperature
       integer, dimension(:), allocatable :: seedOceanMaskHorizOld
       integer, pointer :: nCells, nCellsSolve, nISMIP6OceanLayers, nCellsExtra
       integer, dimension(:), pointer :: cellMask, nEdgesOnCell
@@ -118,9 +118,6 @@ contains
       integer, dimension(:), pointer :: seedMask, growMask, connectedMarineMask, altConnectedMarineMask
       real (kind=RKIND), dimension(:,:,:), pointer :: oceanField
 
-      !debugg:
-      integer :: i, saltDimSize, tempDimSize
-      
       ! No init is needed.
       err = 0
       err_tmp = 0
@@ -137,7 +134,7 @@ contains
          call mpas_pool_get_config(liConfigs, 'config_sea_level', config_sea_level)
          call mpas_pool_get_config(liConfigs, 'config_ocean_data_extrap_ncells_extra', nCellsExtra)
          call mpas_pool_get_config(liConfigs, 'config_recalculate_thermal_forcing', config_recalculate_thermal_forcing)
-         call mpas_pool_get_config(liConfigs, 'config_TF_param_type', config_TF_param_type)
+         call mpas_pool_get_config(liConfigs, 'config_extrap_sill_blocking', config_extrap_sill_blocking)
          call mpas_pool_get_config(liConfigs, 'config_invalid_value_TF', invalid_value_TF)
          call mpas_pool_get_subpool(block % structs, 'mesh', meshPool)
          call mpas_pool_get_subpool(block % structs, 'geometry', geometryPool)
@@ -162,8 +159,8 @@ contains
          call mpas_pool_get_array(extrapOceanDataPool, 'altConnectedMarineMask', altConnectedMarineMask)
 
          if (config_recalculate_thermal_forcing) then
-            call mpas_pool_get_array(extrapOceanDataPool, 'MPAS_3dOceanTemperature', MPAS_3dOceanTemperature)
-            call mpas_pool_get_array(extrapOceanDataPool, 'MPAS_3dOceanSalinity', MPAS_3dOceanSalinity)
+            call mpas_pool_get_array(extrapOceanDataPool, 'oceanTemperature', oceanTemperature)
+            call mpas_pool_get_array(extrapOceanDataPool, 'oceanSalinity', oceanSalinity)
          endif
          
          ! create a 2D mask based on the open ocean + floating ice + grounded ice mask to be used for defining the location of the n-extra cells into the grounded ice
@@ -195,7 +192,6 @@ contains
                   enddo
                endif
             enddo
-            seedOceanMaskHorizOld(:) = seedOceanMaskHoriz(:)
             ! Update halos
             ! Note: halo updates could be skipped for a number of iterations equal to the
             ! number of halo rows as a possible performance improvement in the future.
@@ -204,6 +200,7 @@ contains
             call mpas_dmpar_field_halo_exch(domain, 'growOceanMaskHoriz')
             call mpas_dmpar_field_halo_exch(domain, 'seedOceanMaskHoriz')
             call mpas_timer_stop("halo updates")
+            seedOceanMaskHorizOld(:) = seedOceanMaskHoriz(:)
          enddo
          deallocate(seedOceanMaskHorizOld)
 
@@ -240,6 +237,11 @@ contains
          call li_flood_fill(seedMask, growMask, domain)
          
          connectedMarineMask(:) = seedMask(:)
+         
+         ! halo update
+         call mpas_timer_start("halo updates")
+         call mpas_dmpar_field_halo_exch(domain, 'connectedMarineMask')
+         call mpas_timer_stop("halo updates")
 
          ! Calculate mask of ice-free cells with bedTopography below sea level
          ! and that are connected the ocean (again through only ice-free cells).
@@ -270,14 +272,19 @@ contains
          
          altConnectedMarineMask(:) = seedMask(:)
          
+         ! halo update
+         call mpas_timer_start("halo updates")
+         call mpas_dmpar_field_halo_exch(domain, 'altConnectedMarineMask')
+         call mpas_timer_stop("halo updates")
+         
          ! alter orig3dOceanMask if necessary to avoid errors
          do iCell = 1, nCells
             if ( (altConnectedMarineMask(iCell) /= connectedMarineMask(iCell)) .and. (thickness(iCell) == 0.0_RKIND) ) then
                if (config_recalculate_thermal_forcing) then
                   do iLayer = 1, nISMIP6OceanLayers 
                      ! for ice-dammed inland seas, assume default salinity, and back-calculate sea temperature to ensure zero thermal forcing
-                     MPAS_3dOceanSalinity(iLayer,iCell) = default_salinity
-                     MPAS_3dOceanTemperature(iLayer,iCell) = (gamma1 * MPAS_3dOceanSalinity(iLayer,iCell) + gamma2 + gamma3 * ismip6shelfMelt_zOcean(iLayer))
+                     oceanSalinity(iLayer,iCell) = default_salinity
+                     oceanTemperature(iLayer,iCell) = (gamma1 * oceanSalinity(iLayer,iCell) + gamma2 + gamma3 * ismip6shelfMelt_zOcean(iLayer))
                   enddo
                endif
                
@@ -295,15 +302,14 @@ contains
                    connectedMarineMask(iCell) = 0
                  
                    if (config_recalculate_thermal_forcing) then
-                      MPAS_3dOceanTemperature(iLayer,iCell) = 0.0_RKIND
-                      MPAS_3dOceanSalinity(iLayer,iCell) = 0.0_RKIND
+                      oceanTemperature(iLayer,iCell) = 0.0_RKIND
+                      oceanSalinity(iLayer,iCell) = 0.0_RKIND
                    endif
                    call mpas_log_write("WARNING: non-ocean cells removed from orig3dOceanMask")
                endif
             enddo
          enddo
 
-         ! make it a 3D mask based on the topography (loop through nISMIP6OceanLayers)
          call mpas_pool_get_dimension(meshPool, 'nISMIP6OceanLayers', nISMIP6OceanLayers)
          call mpas_pool_get_array(geometryPool, 'ismip6shelfMelt_zOcean', ismip6shelfMelt_zOcean)
          call mpas_pool_get_array(geometryPool, 'ismip6shelfMelt_zBndsOcean', ismip6shelfMelt_zBndsOcean)
@@ -344,8 +350,7 @@ contains
                   if ( (bedTopography(iCell) < layerCenter) .or. ((iLayer == 1) .and. (bedTopography(iCell) < 0.0_RKIND)) )then
                      availOceanMask(iLayer,iCell) = 1
                      
-                  elseif ((config_recalculate_thermal_forcing) .and. &
-                            ( (config_TF_param_type == 'ISMIP6retreat') .or. (config_TF_param_type == 'AMretreat'))) then
+                  elseif ((config_recalculate_thermal_forcing) .and. (.not. config_extrap_sill_blocking)) then
                         
                         ! If recalculating thermal forcing with ISMIP6retreat or AMretreat methods, then ignore
                         ! topography and allow for translation of water properties directly to glacier face.
@@ -362,8 +367,8 @@ contains
          if (config_recalculate_thermal_forcing) then
             
             !combine fields into one variable to expedite extrapolation
-            oceanField(1,:,:) = MPAS_3dOceanTemperature(:,:) * validOceanMask(:,:)
-            oceanField(2,:,:) = MPAS_3dOceanSalinity(:,:) * validOceanMask(:,:)
+            oceanField(1,:,:) = oceanTemperature(:,:) * validOceanMask(:,:)
+            oceanField(2,:,:) = oceanSalinity(:,:) * validOceanMask(:,:)
          else
 
             oceanField(1,:,:) = ismip6shelfMelt_3dThermalForcing * validOceanMask(:,:)
@@ -371,7 +376,7 @@ contains
          endif
          
          ! initialize the invalid data locations with fill value
-         do iCell = 1, nCellsSolve
+         do iCell = 1, nCells
             do iLayer = 1, nISMIP6OceanLayers
                if ((connectedMarineMask(iCell) == 0) .and. (bedTopography(iCell) < config_sea_level)) then
                   ! Don't assign invalid value to lakes/inland seas disconnected from global ocean
@@ -384,6 +389,11 @@ contains
                endif
             enddo
          enddo
+
+         ! halo update
+         call mpas_timer_start("halo updates")
+         call mpas_dmpar_field_halo_exch(domain, 'oceanField')
+         call mpas_timer_stop("halo updates")
 
          ! deallocate scratch fields used for flood fill
          call mpas_deallocate_scratch_field(seedMaskField, single_block_in=.true.)
@@ -423,15 +433,15 @@ contains
 
          ! Reassign extrapolated TF back to primary TF field
          if (config_recalculate_thermal_forcing) then
-            MPAS_3dOceanTemperature(:,:) = oceanField(1,:,:)
-            MPAS_3dOceanSalinity(:,:) = oceanField(2,:,:)
+            oceanTemperature(:,:) = oceanField(1,:,:)
+            oceanSalinity(:,:) = oceanField(2,:,:)
 
             call recalculate_thermal_forcing(domain, err)
 
             ! Ensure zero thermal forcing where temp and salt are zero
             do iCell = 1, nCells
                do iLayer = 1, nISMIP6OceanLayers
-                  if ( (MPAS_3dOceanTemperature(iLayer,iCell) == 0.0_RKIND) .and. (MPAS_3dOceanSalinity(iLayer,iCell) == 0.0_RKIND) ) then
+                  if ( (oceanTemperature(iLayer,iCell) == 0.0_RKIND) .and. (oceanSalinity(iLayer,iCell) == 0.0_RKIND) ) then
                      ismip6shelfMelt_3dThermalForcing(iLayer,iCell) = 0.0_RKIND
                   endif
                enddo
@@ -772,9 +782,9 @@ contains
 !> \date   September 2024
 !> \details
 !> Use extrapolated temperature and salt to recalculate thermal forcing 
-!> throughout the extrapolated region. User specifies which thermal forcing 
-!> parameterization from Hager et al. (2023) to use with
-!> config_TF_param_type. Output thermal forcing fields are 2D.
+!> throughout the extrapolated region. If config_TF_iceberg_melt is true,
+!> then ocean temperature in the upper water column will first be 
+!> artificially cooled to immitate iceberg melt-driven cooling.
 !-----------------------------------------------------------------------
 
    subroutine recalculate_thermal_forcing(domain, err)
@@ -798,11 +808,11 @@ contains
       !-----------------------------------------------------------------
       type (block_type), pointer :: block
       type (mpas_pool_type), pointer :: geometryPool, meshPool, extrapOceanDataPool
-      character (len=StrKIND), pointer :: config_TF_param_type
+      character (len=StrKIND), pointer :: config_TF_iceberg_melt
       real (kind=RKIND), pointer :: config_TF_iceberg_depth
       real (kind=RKIND), dimension(:,:), pointer :: ismip6shelfMelt_3dThermalForcing
-      real (kind=RKIND), dimension(:,:), pointer :: MPAS_3dOceanTemperature
-      real (kind=RKIND), dimension(:,:), pointer :: MPAS_3dOceanSalinity
+      real (kind=RKIND), dimension(:,:), pointer :: oceanTemperature
+      real (kind=RKIND), dimension(:,:), pointer :: oceanSalinity
       real (kind=RKIND), dimension(:), pointer :: ismip6shelfMelt_zOcean
       real (kind=RKIND), dimension(:,:), pointer :: ismip6shelfMelt_zBndsOcean
       integer, dimension(:), pointer :: icebergFjordMask
@@ -813,19 +823,16 @@ contains
       real (kind=RKIND), dimension(:), allocatable :: freezingTemperature
       real (kind=RKIND) :: inverseSalt, phaseChange, tempDiff, saltDiff, newTemp, gadeSlope
 
-      !debugging:
-      integer :: saltDimSize, tempDimSize, i
-
       block => domain % blocklist
       do while (associated(block))
       call mpas_pool_get_subpool(block % structs, 'mesh', meshPool)
       call mpas_pool_get_subpool(block % structs, 'geometry', geometryPool)
       call mpas_pool_get_subpool(block % structs, 'extrapOceanData', extrapOceanDataPool)
-      call mpas_pool_get_config(liConfigs, 'config_TF_param_type', config_TF_param_type)
+      call mpas_pool_get_config(liConfigs, 'config_TF_iceberg_melt', config_TF_iceberg_melt)
       call mpas_pool_get_config(liConfigs, 'config_TF_iceberg_depth', config_TF_iceberg_depth)
       call mpas_pool_get_array(geometryPool, 'ismip6shelfMelt_3dThermalForcing', ismip6shelfMelt_3dThermalForcing)
-      call mpas_pool_get_array(extrapOceanDataPool, 'MPAS_3dOceanTemperature', MPAS_3dOceanTemperature)
-      call mpas_pool_get_array(extrapOceanDataPool, 'MPAS_3dOceanSalinity', MPAS_3dOceanSalinity)
+      call mpas_pool_get_array(extrapOceanDataPool, 'oceanTemperature', oceanTemperature)
+      call mpas_pool_get_array(extrapOceanDataPool, 'oceanSalinity', oceanSalinity)
       call mpas_pool_get_array(geometryPool, 'ismip6shelfMelt_zOcean', ismip6shelfMelt_zOcean)
       call mpas_pool_get_array(geometryPool, 'ismip6shelfMelt_zBndsOcean', ismip6shelfMelt_zBndsOcean)
       call mpas_pool_get_array(geometryPool, 'bedTopography', bedTopography)
@@ -838,16 +845,14 @@ contains
       do iCell = 1, nCells
         !Main difference between these parameterization is how we collapse into 2d, which happens in mpas_li_ice_shelt_melt.F
         !Difference between '...melt' and '...retreat' parameterizations happens in main body of mpas_li_ocean_extrap.F
-        if ( (config_TF_param_type == 'AMretreat') .or. (config_TF_param_type == 'ISMIP6retreat') &
-                .or. (config_TF_param_type == 'AMmelt') .or. (config_TF_param_type == 'ISMIP6melt') &
-                .or. ((config_TF_param_type == 'AMfit') .and. (icebergFjordMask(iCell)) == 0) ) then
+        if (config_TF_iceberg_melt == 'off') then
 
             ! From Jenkins 2011 and Slater 2020
             do iLayer = 1, nISMIP6OceanLayers
-                ismip6shelfMelt_3dThermalForcing(iLayer,iCell) = MPAS_3dOceanTemperature(iLayer,iCell) - (gamma1 * MPAS_3dOceanSalinity(iLayer,iCell) + gamma2 + gamma3 * ismip6shelfMelt_zOcean(iLayer))
+                ismip6shelfMelt_3dThermalForcing(iLayer,iCell) = oceanTemperature(iLayer,iCell) - (gamma1 * oceanSalinity(iLayer,iCell) + gamma2 + gamma3 * ismip6shelfMelt_zOcean(iLayer))
             enddo
 
-        elseif ( (config_TF_param_type == 'AMberg') .or. ( (config_TF_param_type == 'AMfit') .and. (icebergFjordMask(iCell) == 1)) ) then
+        elseif ( (config_TF_iceberg_melt == 'on') .or. ( (config_TF_iceberg_melt == 'mask') .and. (icebergFjordMask(iCell) == 1)) ) then
             ! Alter 3d profile following the iceberg Parameterization from Hager 2023 for fjord where icebergs are prevalent
             ! find cell just above config_TF_iceberg_depth
             icebergCellVertID = 0
@@ -860,44 +865,37 @@ contains
                ! calculate freezing temperature. 
                ! << NOTE >>: Again we are using the simplified equation from Jenkins 2011 to do this. May eventually want to 
                ! switch to method in gsw toolbox to do this to be consistent with Hager 2023
-               freezingTemperature(iLayer) = (gamma1 * MPAS_3dOceanSalinity(iLayer,iCell) + gamma2 + gamma3 * ismip6shelfMelt_zOcean(iLayer))
+               freezingTemperature(iLayer) = (gamma1 * oceanSalinity(iLayer,iCell) + gamma2 + gamma3 * ismip6shelfMelt_zOcean(iLayer))
             enddo
 
             !Start alteration just above iceberg depth or bedTopography and work upwards
-            iLayer = icebergCellVertID
-            do while (iLayer > 0)
-            
+            do iLayer = icebergCellVertID, 1, -1 
                ! Calculate Gade slope (slope of submarine melt mixing line) at each z-level. Assumes ice at pressure melting temperature
-               if (MPAS_3dOceanSalinity(iLayer,iCell) == 0) then
+               if (oceanSalinity(iLayer,iCell) == 0) then
                   gadeSlope = 0.0_RKIND
                else
-                  inverseSalt = (1.0_RKIND / MPAS_3dOceanSalinity(iLayer,iCell)) 
+                  inverseSalt = (1.0_RKIND / oceanSalinity(iLayer,iCell)) 
                   phaseChange = L/cp 
-                  tempDiff = (freezingTemperature(iLayer) - MPAS_3dOceanTemperature(iLayer,iCell))
+                  tempDiff = (freezingTemperature(iLayer) - oceanTemperature(iLayer,iCell))
 
                   gadeSlope = inverseSalt * (phaseChange - tempDiff)
                endif
 
                ! Now that we have the slope of the melt line, alter ocean temperatures along submarine melt line. Assume linear function
                ! between current z-level and one z-level below
-               saltDiff = MPAS_3dOceanSalinity(iLayer,iCell) - MPAS_3dOceanSalinity(iLayer + 1,iCell)     
+               saltDiff = oceanSalinity(iLayer,iCell) - oceanSalinity(iLayer + 1,iCell)     
                   
-               newTemp = (gadeSlope * saltDiff) + MPAS_3dOceanTemperature(iLayer + 1, iCell)
+               newTemp = (gadeSlope * saltDiff) + oceanTemperature(iLayer + 1, iCell)
                ! Ensure iceberg melting only cools ocean. Uncommon but possible to warm ocean if already a sharp thermocline in the ocean.
                ! In reality, melt-driven upwelling can warm ocean but we are not accounting for this process.
-               if (newTemp < MPAS_3dOceanTemperature(iLayer,iCell)) then
-                  MPAS_3dOceanTemperature(iLayer,iCell) = newTemp
-               endif
+                oceanTemperature(iLayer,iCell) = min(newTemp,oceanTemperature(iLayer,iCell))
+           
                ! Ensure no artificially adjusted temperatures fall below the freezing temperature
-               if (MPAS_3dOceanTemperature(iLayer, iCell) < freezingTemperature(iLayer)) then
-                  MPAS_3dOceanTemperature(iLayer, iCell) = freezingTemperature(iLayer)
-               endif
-            
-               iLayer = iLayer - 1 !Reiterate upwards through water column
+               oceanTemperature(iLayer, iCell) = max(freezingTemperature(iLayer), oceanTemperature(iLayer,iCell))
             enddo
             
             do iLayer = 1, nISMIP6OceanLayers
-               ismip6shelfMelt_3dThermalForcing(iLayer, iCell) = MPAS_3dOceanTemperature(iLayer, iCell) - freezingTemperature(iLayer)
+               ismip6shelfMelt_3dThermalForcing(iLayer, iCell) = oceanTemperature(iLayer, iCell) - freezingTemperature(iLayer)
             enddo
         endif
       enddo
