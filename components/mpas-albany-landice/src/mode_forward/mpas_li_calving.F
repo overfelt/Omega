@@ -186,12 +186,19 @@ module li_calving
       ! after other calving routines.
       block => domain % blocklist
       do while (associated(block))
+         call mpas_pool_get_subpool(block % structs, 'geometry', geometryPool)
+         call mpas_pool_get_array(geometryPool, 'calvingThickness', calvingThickness)
+         call mpas_pool_get_array(geometryPool, 'calvingThicknessFromThreshold', calvingThicknessFromThreshold)
+         call mpas_pool_get_array(geometryPool, 'calvingVelocity', calvingVelocity)
+         calvingThickness(:) = 0.0_RKIND
+         calvingThicknessFromThreshold(:) = 0.0_RKIND
+         calvingVelocity(:) = 0.0_RKIND
+
          ! Calculate strainRateEnhancementForCalving if requested.
          ! Do here to avoid each calving method needing to
          ! call it.  Do here instead of when melt rate is
          ! calculated to keep this calculation modular with calving code
          ! (e.g. if order of operations is changed or data melt rates are used)
-         call mpas_pool_get_subpool(block % structs, 'geometry', geometryPool)
          call mpas_pool_get_array(geometryPool, 'faceMeltSpeed', faceMeltSpeed)
          call mpas_pool_get_array(geometryPool, 'strainRateEnhancementForCalving', strainRateEnhancementForCalving)
          call calculate_facemelt_strainrate_enhancement(faceMeltSpeed, strainRateEnhancementForCalving)
@@ -295,8 +302,7 @@ module li_calving
          call crevasse_depth_calving(domain, err_tmp)
          err = ior(err, err_tmp)
 
-      elseif ((trim(config_calving) == 'specified_calving_velocity') .or. &
-              (trim(config_calving) == 'specified_retreat_velocity')) then
+      elseif (trim(config_calving) == 'specified_calving_velocity') then
 
          call specified_calving_velocity(domain, err_tmp)
          err = ior(err, err_tmp)
@@ -1577,16 +1583,12 @@ module li_calving
 !
 !    routine specified_calving_velocity
 !
-!> \brief use a specified calving or retreat velocity given by input data
+!> \brief use a specified calving velocity given by input data
 !> \author Matthew Hoffman
 !> \date   Feb. 2018
 !> \details we can specify the calving velocity by i) a constant value
 !> given by config_calving_velocity_const in namelist and ii) source data
 !> specified by calvingVelocityData
-!> This subroutine handles both the specified_calving_velocity and
-!> specified_retreat_velocity options.  In the latter case, the flow speed
-!> is added to the specified retreat rate to obtain a calving rate that will
-!> yield the desired retreat rate.
 !-----------------------------------------------------------------------
    subroutine specified_calving_velocity(domain, err)
 
@@ -1614,7 +1616,6 @@ module li_calving
       type (mpas_pool_type), pointer :: velocityPool
       type (mpas_pool_type), pointer :: scratchPool
       logical, pointer :: config_print_calving_info
-      character (len=StrKIND), pointer :: config_calving
       real(kind=RKIND), pointer :: config_calving_thickness
       real(kind=RKIND), pointer :: config_calving_velocity_const
       character (len=StrKIND), pointer :: config_calving_specified_source
@@ -1623,7 +1624,6 @@ module li_calving
       real (kind=RKIND), dimension(:), pointer :: angleEdge
       real (kind=RKIND), dimension(:), pointer :: thickness
       real (kind=RKIND), dimension(:), pointer :: calvingThickness
-      real (kind=RKIND), dimension(:), pointer :: xvelmean, yvelmean
       real (kind=RKIND), pointer :: calvingCFLdt
       real (kind=RKIND), pointer :: dtCalvingCFLratio
       integer, dimension(:,:), pointer :: cellsOnCell ! list of cells that neighbor each cell
@@ -1642,7 +1642,6 @@ module li_calving
 
       err = 0
 
-      call mpas_pool_get_config(liConfigs, 'config_calving', config_calving)
       call mpas_pool_get_config(liConfigs, 'config_print_calving_info', config_print_calving_info)
       call mpas_pool_get_config(liConfigs, 'config_calving_thickness', config_calving_thickness)
       call mpas_pool_get_config(liConfigs, 'config_calving_velocity_const', config_calving_velocity_const)
@@ -1693,12 +1692,6 @@ module li_calving
          if (config_print_calving_info) then
             call mpas_log_write("calvingVelocity(m s) value range on this processor: Min=$r, Max=$r", &
                     realArgs=(/minval(calvingVelocity), maxval(calvingVelocity)/))
-         endif
-
-         if (trim(config_calving) == 'specified_retreat_velocity') then
-            call mpas_pool_get_array(velocityPool, 'xvelmean', xvelmean)
-            call mpas_pool_get_array(velocityPool, 'yvelmean', yvelmean)
-            calvingVelocity = calvingVelocity + sqrt(xvelmean**2.0_RKIND + yvelmean**2.0_RKIND)
          endif
 
          ! Convert calvingVelocity to calvingThickness
@@ -3982,8 +3975,6 @@ module li_calving
                                         thermalPool
       character (len=StrKIND), pointer :: config_flowParamA_calculation, &
                                           config_crevasse_water_depth_source
-      character (len=StrKIND), pointer :: config_damage_calving_method
-      logical, pointer :: config_calculate_damage
       integer :: iCell, err_tmp
       integer, pointer :: nCells
       real (kind=RKIND), pointer :: config_ice_density, config_ocean_density
@@ -4013,8 +4004,6 @@ module li_calving
       call mpas_pool_get_config(liConfigs, 'config_flowLawExponent', config_flowLawExponent)
       call mpas_pool_get_config(liConfigs, 'config_ice_density', config_ice_density)
       call mpas_pool_get_config(liConfigs, 'config_ocean_density', config_ocean_density)
-      call mpas_pool_get_config(liConfigs, 'config_damage_calving_method', config_damage_calving_method)
-      call mpas_pool_get_config(liConfigs, 'config_calculate_damage', config_calculate_damage)
 
       call mpas_pool_get_subpool(domain % blocklist % structs, 'geometry', geometryPool)
       call mpas_pool_get_subpool(domain % blocklist % structs, 'velocity', velocityPool)
@@ -4036,18 +4025,6 @@ module li_calving
       call mpas_pool_get_array(velocityPool, 'eMax', eMax)
       call mpas_pool_get_array(velocityPool, 'eMin', eMin)
       call mpas_pool_get_array(thermalPool, 'temperature', temperature)
-
-      if (trim(config_damage_calving_method) /= "none") then
-         call mpas_log_write("When using crevasse depth calving, config_damage_calving_method must be set to 'none'", MPAS_LOG_ERR)
-         err = 1
-         return
-      endif
-
-      if (config_calculate_damage) then
-         call mpas_log_write("When using crevasse depth calving, config_calculate_damage must be set to .false.", MPAS_LOG_ERR)
-         err = 1
-         return
-      endif
 
       if (trim(config_flowParamA_calculation) /= "PB1982") then
          call mpas_log_write("When using crevasse depth calving, config_flowParamA_calculation must be set to 'PB1982'", MPAS_LOG_ERR)
@@ -4708,7 +4685,7 @@ module li_calving
 
          ! update count of cells added to mask globally
          call mpas_dmpar_sum_int(domain % dminfo, newMaskCountLocalAccum, newMaskCountGlobal)
-         !call mpas_log_write("  Added $i new cells to global mask", intArgs=(/newMaskCountGlobal/))
+         call mpas_log_write("  Added $i new cells to global mask", intArgs=(/newMaskCountGlobal/))
 
          if (globalLoopCount>200) then
             call mpas_log_write("Too many global loops!", MPAS_LOG_ERR)
@@ -4716,7 +4693,7 @@ module li_calving
       end do ! global loop
       deallocate(seedMaskOld)
 
-      call mpas_log_write("Flood fill complete in $i iterations", intArgs=(/newMaskCountGlobal/))
+      call mpas_log_write("Flood fill complete.")
 
    end subroutine li_flood_fill
 
