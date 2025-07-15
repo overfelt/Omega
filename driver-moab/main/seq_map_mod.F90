@@ -186,7 +186,7 @@ contains
                    maprcfile, maprcname, maprctype, samegrid, arearead, map_identifier, &
                    description_string, esmf_map, fallback_map_identifier )
 
-   use iMOAB, only: iMOAB_LoadFromMappingFile
+   use iMOAB, only: iMOAB_LoadMapFile
    implicit none
    !-----------------------------------------------------
    !
@@ -244,7 +244,7 @@ contains
          write(logunit,*) subname,' reading map file with iMOAB: ', trim(mapfile_term)
       endif
 
-   ierr = iMOAB_LoadFromMappingFile( mbsrc, mbtgt, mbintx, discretization_type, &
+   ierr = iMOAB_LoadMapFile( mbsrc, mbtgt, mbintx, discretization_type, &
                       discretization_type, arearead, sol_identifier, mapfile_term)
    if (ierr .ne. 0) then
       write(logunit,*) subname,' error in loading map file'
