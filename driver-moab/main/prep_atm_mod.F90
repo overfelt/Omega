@@ -740,23 +740,25 @@ contains
             wgtIdFi2a = wgtIdSi2a ! we use the same weights as for Si2a
          end if
 
-         mapper_Fi2a%src_mbid = mbixid
-         mapper_Fi2a%tgt_mbid = mbaxid
-         mapper_Fi2a%intx_mbid = mbintxia
-         mapper_Fi2a%src_context = ice(1)%cplcompid
-         mapper_Fi2a%intx_context = idintx
-         mapper_Fi2a%weight_identifier = wgtIdFi2a
-         mapper_Fi2a%mbname = 'mapper_Fi2a'
-         if ( samegrid_ao ) then ! this case can appear in cice case
-            type1 = 3; !  fv for ice and atm;
-            type2 = 3;
-            ierr = iMOAB_ComputeCommGraph( mbixid, mbaxid, mpicom_CPLID, mpigrp_CPLID, mpigrp_CPLID, type1, type2, &
-                                       ice(1)%cplcompid, atm(1)%cplcompid )
-            if (ierr .ne. 0) then
-               write(logunit,*) subname,' error in computing comm graph for ice-atm'
-               call shr_sys_abort(subname//' ERROR in computing comm graph for ice-atm')
-            endif
-            mapper_Fi2a%intx_context = atm(1)%cplcompid
+               ! need to call migrate map mesh, which will compute the right covering mesh
+               context_id = idintx ! intx id
+               ierr = iMOAB_MigrateMapMesh( mbixid, mbintxia, mpicom_CPLID, mpigrp_CPLID, &
+                                          mpigrp_CPLID, type1, ice(1)%cplcompid, context_id)
+               if (ierr .ne. 0) then
+                  write(logunit,*) subname,' error in migrating ocn mesh for map ocn c2 atm '
+                  call shr_sys_abort(subname//' ERROR in migrating ocn mesh for map ocn c2 atm  ')
+               endif
+            else
+               wgtIdFi2a = wgtIdSi2a ! we use the same weights as for Si2a
+            end if
+
+            mapper_Fi2a%src_mbid = mbixid
+            mapper_Fi2a%tgt_mbid = mbaxid
+            mapper_Fi2a%intx_mbid = mbintxia
+            mapper_Fi2a%src_context = ice(1)%cplcompid
+            mapper_Fi2a%intx_context = idintx
+            mapper_Fi2a%weight_identifier = wgtIdFi2a
+            mapper_Fi2a%mbname = 'mapper_Fi2a'
          endif
       endif !  if (ice_present) then
       call shr_sys_flush(logunit)

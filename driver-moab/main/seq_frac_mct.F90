@@ -183,7 +183,6 @@ module seq_frac_mct
 #ifdef MOABDEBUG
    use seq_comm_mct,     only : num_moab_exports
 #endif
-  use shr_moab_mod, only : mbGetnCells, mbGetCellTagVals, mbSetCellTagVals
 
   use shr_kind_mod, only: CL => SHR_KIND_CL, CX => SHR_KIND_CX, CXX => SHR_KIND_CXX
   use iso_c_binding ! C_NULL_CHAR
@@ -286,6 +285,10 @@ contains
 
     !----- local -----
     type(mct_ggrid), pointer    :: dom_a
+    type(mct_gsmap), pointer    :: gsmap_a ! see if we can get from here the global ids (missing from dom_a)
+    type(mct_gsmap), pointer    :: gsmap_l
+    type(mct_gsmap), pointer    :: gsmap_r
+    type(mct_gsmap), pointer    :: gsmap_i ! ofrac on ice error
     type(mct_ggrid), pointer    :: dom_i
     type(mct_ggrid), pointer    :: dom_l
     type(mct_ggrid), pointer    :: dom_o
@@ -391,26 +394,28 @@ contains
             write(logunit,*) subname,' error in defining tags on atm phys mesh on cpl '
             call shr_sys_abort(subname//' ERROR in defining tags on atm phys mesh on cpl')
          endif
+         ! find out the number of local elements in moab mesh
+         ierr  = iMOAB_GetMeshInfo ( mbaxid, nvert, nvise, nbl, nsurf, nvisBC );
 
+         ! we should set to 1 the 'afrac' tag
          ! we are on cells now !
-         arrSize = mbGetnCells(mbaxid)
-
-         ! there are 5 tags that need to be zeroed out
-         allocate(tagValues(arrSize*5) )
-
+         arrSize = nvise(1) * 5 ! there are 5 tags that need to be zeroed out
+         allocate(tagValues(arrSize) )
+         ent_type = 1 ! cell type
          tagValues = 0.0_r8
 
          call mbSetCellTagVals(mbaxid, fraclist_a, tagValues, arrSize*5)
 
          deallocate(tagValues)
 
-
-         ! set afrac to 1.0
-         allocate(tagValues(arrSize))
+         allocate(tagValues(nvise(1)))
+         tagname = 'afrac'//C_NULL_CHAR
          tagValues = 1.0_r8
-         call mbSetCellTagVals(mbaxid, 'afrac',tagValues,arrSize)
-
-
+         ierr = iMOAB_SetDoubleTagStorage ( mbaxid, tagname, nvise(1) , ent_type, tagValues)
+         if (ierr .ne. 0) then
+            write(logunit,*) subname,' error in setting afrac tag on phys atm  '
+            call shr_sys_abort(subname//' ERROR in setting afrac tag on phys atm')
+         endif
          deallocate(tagValues)
        endif
     endif
@@ -434,8 +439,7 @@ contains
        lSize = mct_aVect_lSize(dom_l%data)
        call mct_aVect_init(fractions_l,rList=fraclist_l,lsize=lsize)
        call mct_aVect_zero(fractions_l)
-       if (mblxid .ge. 0  ) then
-         arrSize = mbGetnCells(mblxid)
+       if (mblxid .ge. 0  ) then ! //
          tagname = trim(fraclist_l)//C_NULL_CHAR ! 'afrac:lfrac:lfrin'
          tagtype = 1  ! dense, double
          numco = 1 !
@@ -444,31 +448,51 @@ contains
             write(logunit,*) subname,' error in defining tags on lnd phys mesh on cpl '
             call shr_sys_abort(subname//' ERROR in defining tags on lnd phys mesh on cpl')
          endif
+         ierr  = iMOAB_GetMeshInfo ( mblxid, nvert, nvise, nbl, nsurf, nvisBC );
+         ! this should have some cells
+         ent_type = 1 ! cells from now on
+         arrSize = 3 * nvise(1)
 
-         ! zero the fractions on land
-         allocate(tagValues(arrSize*3) )
-         tagValues = 0.0_r8
-         call mbSetCellTagVals(mblxid, fraclist_l,tagValues,arrSize*3)
-
+         allocate(tagValues(arrSize) )
+         tagValues = 0
+         ierr = iMOAB_SetDoubleTagStorage ( mblxid, tagname, arrSize , ent_type, tagValues)
+         if (ierr .ne. 0) then
+            write(logunit,*) subname,' error in setting fractions tags on lnd   '
+            call shr_sys_abort(subname//' ERROR in setting fractions tags on lnd')
+         endif
          deallocate(tagValues)
        endif
 #ifdef MOABDEBUG
-       ! mblx2id is the id for moab app exposing land cpl 
-       if(mblxid > 0) then
-           call expose_mct_grid_moab(lnd, mblx2id)
-       endif
-       if (mbixid > 0 ) then
-           call expose_mct_grid_moab(ice, mbix2id)
-       endif
+       ! mblx2id is the id for moab app exposing land cpl
+       call expose_mct_grid_moab(lnd, mblx2id)
+       call expose_mct_grid_moab(ice, mbix2id)
 #endif
       ! set lfrin to the domain frac
        kk = mct_aVect_indexRA(fractions_l,"lfrin",perrWith=subName)
        kf = mct_aVect_indexRA(dom_l%data ,"frac" ,perrWith=subName)
        fractions_l%rAttr(kk,:) = dom_l%data%rAttr(kf,:)
-       if (mblxid .ge. 0  ) then
-         allocate(tagValues(arrSize))
-         call mbGetCellTagVals(mblxid, 'frac',tagValues,arrSize)
-         call mbSetCellTagVals(mblxid, 'lfrin',tagValues,arrSize)
+       if (mblxid .ge. 0  ) then ! //
+         tagname = 'lfrin'//C_NULL_CHAR ! 'lfrin'
+         allocate(tagValues(lSize) )
+         tagValues = dom_l%data%rAttr(kf,:)
+
+         !kgg = mct_aVect_indexIA(dom_l%data ,"GlobGridNum" ,perrWith=subName)
+         !allocate(GlobalIds(lSize))
+         !GlobalIds = dom_l%data%iAttr(kgg,:)
+
+         gsmap_l  => component_get_gsmap_cx(lnd) ! gsmap_lx
+         call mpi_comm_rank(mpicom,my_task,ierr)
+         ! Determine global gridpoint number attribute, GlobGridNum, automatically in ggrid
+         call mct_gsMap_orderedPoints(gsmap_l, my_task, dof)
+
+         ! ent_type should be 3, FV
+         ierr = iMOAB_SetDoubleTagStorageWithGid ( mblxid, tagname, lSize , ent_type, tagValues, dof )
+         if (ierr .ne. 0) then
+            write(logunit,*) subname,' error in setting lfrin on lnd   '
+            call shr_sys_abort(subname//' ERROR in setting lfrin on lnd')
+         endif
+         !deallocate(GlobalIds)
+         deallocate(dof)
          deallocate(tagValues)
 
        endif
@@ -504,13 +528,12 @@ contains
             write(logunit,*) subname,' error in defining tags on rof phys mesh on cpl '
             call shr_sys_abort(subname//' ERROR in defining tags on rof phys mesh on cpl')
          endif
-
-         arrSize = mbGetnCells(mbrxid)
-
-         allocate(tagValues(arrSize*3) )
-         TagValues = 0.0_r8
-         call mbSetCellTagVals(mbrxid, fraclist_r,tagValues,arrSize*3)
-
+         ierr  = iMOAB_GetMeshInfo ( mbrxid, nvert, nvise, nbl, nsurf, nvisBC );
+         arrSize = 3 * nvise(1) ! there are 3 tags
+         allocate(tagValues(arrSize) )
+         ent_type = 1 ! vertex type, rof is now FV
+         tagValues = 0.
+         ierr = iMOAB_SetDoubleTagStorage ( mbrxid, tagname, arrSize , ent_type, tagValues)
          deallocate(tagValues)
 
          ! set rfrac to frac
@@ -571,8 +594,9 @@ contains
 
          ! set ofrac from the ocean frac
          allocate(tagValues(arrSize) )
-         call mbGetCellTagVals(mbixid, 'frac',tagValues,arrSize)
-         call mbSetCellTagVals(mbixid, 'ofrac',tagValues,arrSize)
+         ent_type = 1  ! cell type, ice is FV
+         tagValues = 0.
+         ierr = iMOAB_SetDoubleTagStorage ( mbixid, tagname, arrSize , ent_type, tagValues)
          deallocate(tagValues)
 #ifdef MOABDEBUG
          wopts   = ';PARALLEL=WRITE_PART'//C_NULL_CHAR
@@ -630,14 +654,14 @@ contains
             write(logunit,*) subname,' error in defining tags on ocn phys mesh on cpl '
             call shr_sys_abort(subname//' ERROR in defining tags on ocn phys mesh on cpl')
          endif
-         ! NOTE assume mboxid and mbofxid have the same local size
-         arrSize = mbGetnCells(mboxid)
-
-         ! zero the fraclist_o tags
-         allocate(tagValues(arrSize*5) )
-         tagValues = 0._r8
-         call mbSetCellTagVals(mboxid, fraclist_o,tagValues,arrSize*5)
-         call mbSetCellTagVals(mbofxid, fraclist_o,tagValues,arrSize*5)
+          ierr  = iMOAB_GetMeshInfo ( mboxid, nvert, nvise, nbl, nsurf, nvisBC );
+         arrSize = 5 * nvise(1) ! there are 5 tags 'afrac:ifrac:ofrac:ifrad:ofrad'
+         local_size_mb_ocn = nvise(1)
+         allocate(tagValues(arrSize) )
+         ent_type = 1  ! cell type, ocn is FV
+         tagValues = 0.
+         ierr = iMOAB_SetDoubleTagStorage ( mboxid, tagname, arrSize , ent_type, tagValues)
+         ierr = iMOAB_SetDoubleTagStorage ( mbofxid, tagname, arrSize , ent_type, tagValues)
          deallocate(tagValues)
 
        endif
@@ -659,12 +683,13 @@ contains
           fractions_o%rAttr(ko,:) = dom_o%data%rAttr(kf,:)
           ! so the frac var from dom is copied into ofrac field
           !  frac is on ocean mesh, ofrac is on ocean mesh too;
-
-          ! ofrac is copied from frac on ocean
-          allocate(tagValues(arrSize) )
-          call mbGetCellTagVals(mboxid, 'frac',tagValues,arrSize)
-          call mbSetCellTagVals(mboxid, 'ofrac',tagValues,arrSize)
-          call mbSetCellTagVals(mbofxid, 'ofrac',tagValues,arrSize)
+          tagname = 'frac'//C_NULL_CHAR
+          ent_type = 1! cells
+          allocate(tagValues(local_size_mb_ocn) )
+          ierr = iMOAB_GetDoubleTagStorage ( mboxid, tagname, local_size_mb_ocn , ent_type, tagValues)
+          tagname = 'ofrac'//C_NULL_CHAR
+          ierr = iMOAB_SetDoubleTagStorage ( mboxid, tagname, local_size_mb_ocn , ent_type, tagValues)
+          ierr = iMOAB_SetDoubleTagStorage ( mbofxid, tagname, local_size_mb_ocn , ent_type, tagValues)
           deallocate(tagValues)
           ! map ofrac to atm
           mapper_o2a => prep_atm_get_mapper_Fo2a()
@@ -748,24 +773,40 @@ contains
                 if (atm_frac_correct) fractions_a%rAttr(kl,n) = 1.0_r8
              endif
           enddo
-       !MOAB
-          ! copy lfrin to lfrac
-          call mbGetCellTagVals(mbaxid, 'lfrin',tagValues,arrSize)
-          call mbSetCellTagVals(mbaxid, 'lfrac',tagValues,arrSize)
-
-          ! compute ocean fraction
-          do n = 1,arrSize
-             tagValues2(n) = 1.0_r8 - tagValues(n)
-             if (abs(tagValues2(n)) < eps_fraclim) then
-                tagvalues2(n) = 0.0_r8
-                if (atm_frac_correct) tagValues(n) = 1.0_r8
-             endif
-          enddo
-          call mbSetCellTagVals(mbaxid,'ofrac',tagValues2,arrSize)
-          if(atm_frac_correct) call mbSetCellTagVals(mbaxid, 'lfrac',tagValues,arrSize)
-       endif  ! if mbaxid
-       deallocate(tagValues, tagValues2)
-    endif ! if atm_present
+          ! case --res r05_r05 --compset RMOSGPCC  is coming here
+          ! there are no active ice or ocn comps
+          ! ist is almost like above, except the ofrac is modified too
+          if (mbaxid .ge. 0  ) then ! //
+            tagname = 'lfrac'//C_NULL_CHAR ! 'lfrac
+            allocate(tagValues(lSize) )
+            tagValues = fractions_a%rAttr(kl,:)
+            kgg = mct_aVect_indexIA(dom_a%data ,"GlobGridNum" ,perrWith=subName)
+            !allocate(GlobalIds(lSize))
+            ! GlobalIds = dom_a%data%iAttr(kgg,:)
+            gsmap_a  => component_get_gsmap_cx(atm) ! gsmap_ax
+            call mpi_comm_rank(mpicom,my_task,ierr)
+            ! Determine global gridpoint number attribute, GlobGridNum, automatically in ggrid
+            call mct_gsMap_orderedPoints(gsmap_a, my_task, dof)
+            ! set on atmosphere instance
+            ierr = iMOAB_SetDoubleTagStorageWithGid ( mbaxid, tagname, lSize , ent_type, tagValues, dof )
+            if (ierr .ne. 0) then
+               write(logunit,*) subname,' error in setting lfrac on atm   '
+               call shr_sys_abort(subname//' ERROR in setting lfrac on atm ')
+            endif
+            ! unlike above, set ofrac too
+            tagname = 'ofrac'//C_NULL_CHAR ! 'ofrac
+            tagValues = fractions_a%rAttr(ko,:)
+            ! set on atmosphere instance, ofrac value
+            ierr = iMOAB_SetDoubleTagStorageWithGid ( mbaxid, tagname, lSize , ent_type, tagValues, dof )
+            if (ierr .ne. 0) then
+               write(logunit,*) subname,' error in setting ofrac on atm   '
+               call shr_sys_abort(subname//' ERROR in setting ofrac on atm ')
+            endif
+            deallocate(dof)
+            deallocate(tagValues)
+          endif
+       endif
+    endif
 
     ! --- finally, set fractions_l(lfrac) from fractions_a(lfrac)
     ! --- and fractions_r(lfrac:lfrin) from fractions_l(lfrac:lfrin)
@@ -784,9 +825,24 @@ contains
           kk = mct_aVect_indexRA(fractions_l,"lfrin",perrWith=subName)
           kl = mct_aVect_indexRA(fractions_l,"lfrac",perrWith=subName)
           fractions_l%rAttr(kl,:) = fractions_l%rAttr(kk,:)
-          ! MOAB
-          call mbGetCellTagVals(mblxid, 'lfrin',tagValues,arrSize)
-          call mbSetCellTagVals(mblxid, 'lfrac',tagValues,arrSize)
+          ! still need to do MOAB case, basically copy the value of lfrin to lfrac, on land
+          ! fractions / on land moab instance; otherwise would stay at 0 :)
+          ierr  = iMOAB_GetMeshInfo ( mblxid, nvert, nvise, nbl, nsurf, nvisBC )
+          arrSize = nvise(1) ! there is one tag that we need to copy
+          allocate(tagValues(arrSize) )
+          tagname = 'lfrin'//C_NULL_CHAR
+          ierr = iMOAB_GetDoubleTagStorage ( mbixid, tagname, arrSize , ent_type, tagValues)
+          if (ierr .ne. 0) then
+            write(logunit,*) subname,' error in getting lfrin on lnd   '
+            call shr_sys_abort(subname//' ERROR in getting lfrin on lnd  ')
+          endif
+          tagname = 'lfrac'//C_NULL_CHAR
+          ierr = iMOAB_SetDoubleTagStorage ( mbixid, tagname, arrSize , ent_type, tagValues)
+          if (ierr .ne. 0) then
+            write(logunit,*) subname,' error in setting lfrac on lnd   '
+            call shr_sys_abort(subname//' ERROR in setting lfrac on lnd  ')
+          endif
+          deallocate(tagValues)
        end if
     end if
     if (lnd_present .and. rof_present) then
@@ -939,13 +995,7 @@ contains
     dom_i => component_get_dom_cx(ice)
     i2x_i => component_get_c2x_cx(ice)
 
-    ! make local array big enough to old ocean or ice data.
-    if (mbixid .ge. 0) arrSize_i = mbGetnCells(mbixid)
-    if (mboxid .ge. 0) arrSize_o = mbGetnCells(mboxid)
-    arrSize = arrSize_i
-    if (arrSize_o .gt. arrSize) arrSize = arrSize_o
-
-    ! entire update depends on if ice present.
+    !dom_o => component_get_dom_cx(ocn) !
     if (ice_present) then
        ! MCT
        !copy Si_ifrac to ifrac
