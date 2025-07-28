@@ -9,6 +9,8 @@
 #include <ekat_team_policy_utils.hpp>
 #include <ekat_comm.hpp>
 
+#include "ekat/mpi/ekat_comm.hpp"
+
 namespace scream {
 
 // This property check ensures that energy has been conserved.
@@ -33,23 +35,22 @@ public:
 
   // Constructor
   MassAndEnergyConservationCheck (const ekat::Comm& comm,
-                                  const std::shared_ptr<const AbstractGrid>& grid,
-                                  const Real    mass_error_tolerance,
-                                  const Real    energy_error_tolerance,
-                                  const Field&  pseudo_density_ptr,
-                                  const Field&  ps_ptr,
-                                  const Field&  phis_ptr,
-                                  const Field&  horiz_winds_ptr,
-                                  const Field&  T_mid_ptr,
-                                  const Field&  qv_ptr,
-                                  const Field&  qc_ptr,
-                                  const Field&  qr_ptr,
-                                  const Field&  qi_ptr,
-                                  const Field&  vapor_flux_ptr,
-                                  const Field&  water_flux_ptr,
-                                  const Field&  ice_flux_ptr,
-                                  const Field&  heat_flux_ptr,
-                                  const Field&  h2otemp_ptr);
+                                        const std::shared_ptr<const AbstractGrid>& grid,
+                                        const Real    mass_error_tolerance,
+                                        const Real    energy_error_tolerance,
+                                        const Field&  pseudo_density_ptr,
+                                        const Field&  ps_ptr,
+                                        const Field&  phis_ptr,
+                                        const Field&  horiz_winds_ptr,
+                                        const Field&  T_mid_ptr,
+                                        const Field&  qv_ptr,
+                                        const Field&  qc_ptr,
+                                        const Field&  qr_ptr,
+                                        const Field&  qi_ptr,
+                                        const Field&  vapor_flux_ptr,
+                                        const Field&  water_flux_ptr,
+                                        const Field&  ice_flux_ptr,
+                                        const Field&  heat_flux_ptr);
 
   // The name of the property check
   std::string name () const override { return "Mass and energy column conservation check"; }
@@ -78,7 +79,7 @@ public:
   // in m_fields.
   void compute_current_energy ();
 
-  void global_fixer(const bool air_sea_surface_water_thermo_fixer, const bool print_debug_info);
+  void global_fixer(const bool &);
 
   Real get_echeck() const;
   Real get_total_energy_before() const;
@@ -130,6 +131,7 @@ protected:
 
   ekat::Comm m_comm;
   std::shared_ptr<const AbstractGrid> m_grid;
+  ekat::Comm m_comm;
   std::map<std::string, Field>  m_fields;
 
   int m_num_cols;
@@ -138,8 +140,8 @@ protected:
   Real m_mass_tol;
   Real m_energy_tol;
 
-  Real m_pb_fixer, m_echeck;
-  Real m_total_gas_mass_after, m_total_energy_before;
+  Real pb_fixer, echeck;
+  Real total_gas_mass_after, total_energy_before;
 
   // Current value for total energy. These values
   // should be updated before a process is run.

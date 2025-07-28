@@ -450,9 +450,6 @@ struct DefaultMetadata {
   }
 };
 
-// Create an console logger that logs all ranks
-std::shared_ptr<ekat::logger::LoggerBase> console_logger (const ekat::logger::LogLevel log_level = ekat::logger::LogLevel::info);
-
 extern "C"
 void eamxx_repro_sum(const Real* send, Real* recv,
                        Int nlocal, Int nfld, Int fcomm);

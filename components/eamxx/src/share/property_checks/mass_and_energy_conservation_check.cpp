@@ -1,5 +1,5 @@
 #include "share/property_checks/mass_and_energy_conservation_check.hpp"
-#include "share/physics/physics_constants.hpp"
+#include "physics/share/physics_constants.hpp"
 #include "share/field/field_utils.hpp"
 
 #include <ekat_team_policy_utils.hpp>
@@ -27,8 +27,7 @@ MassAndEnergyConservationCheck (const ekat::Comm& comm,
                                 const Field&        vapor_flux,
                                 const Field&        water_flux,
                                 const Field&        ice_flux,
-                                const Field&        heat_flux,
-                                const Field&        h2otemp)
+                                const Field&        heat_flux)
   : m_comm (comm)
   , m_grid (grid)
   , m_dt (std::nan(""))
@@ -56,10 +55,6 @@ MassAndEnergyConservationCheck (const ekat::Comm& comm,
   m_fields["water_flux"]     = water_flux;
   m_fields["ice_flux"]       = ice_flux;
   m_fields["heat_flux"]      = heat_flux;
-  // h2otemp is optional - only store if provided (i.e., when SurfaceCouplingImporter is active)
-  if (h2otemp.is_allocated()) {
-    m_fields["h2otemp"]      = h2otemp;
-  }
 
   //allocate Fields for fixer reductions
   using namespace ekat::units;
@@ -307,9 +302,8 @@ PropertyCheck::ResultAndMsg MassAndEnergyConservationCheck::check() const
   return res_and_msg;
 }
 
-void MassAndEnergyConservationCheck::global_fixer(const bool air_sea_surface_water_thermo_fixer, const bool print_debug_info)
+void MassAndEnergyConservationCheck::global_fixer(const bool & print_debug_info)
 {
-  using TPF = ekat::TeamPolicyFactory<DefaultDevice::execution_space>;
   const auto ncols = m_num_cols;
   const auto nlevs = m_num_levs;
 
@@ -334,7 +328,7 @@ void MassAndEnergyConservationCheck::global_fixer(const bool air_sea_surface_wat
   const auto ice_flux   = m_fields.at("ice_flux"  ).get_view<const Real*>();
   const auto heat_flux  = m_fields.at("heat_flux" ).get_view<const Real*>();
 
-  const auto policy = TPF::get_default_team_policy(ncols, nlevs);
+  const auto policy = ExeSpaceUtils::get_default_team_policy(ncols, nlevs);
 
   using namespace ekat::units;
   using namespace ShortFieldTagsNames;
@@ -366,24 +360,12 @@ void MassAndEnergyConservationCheck::global_fixer(const bool air_sea_surface_wat
   eamxx_repro_sum(send, &recv, nlocal, ncount, MPI_Comm_c2f(m_comm.mpi_comm()));
   field_version_s1.sync_to_dev();
 
-  m_total_gas_mass_after = recv;
+  total_gas_mass_after = recv;
 
 //this ||4 needs to be 2 for-loops, with one summing each 4 cols first, serially
 //for pg2 grids (if on np4 grids, it would require much more work?)  
   auto energy_change = m_energy_change;
   auto current_energy = m_current_energy;
-  
-  // Get h2otemp view outside lambda if air sea surface water thermo fixer is enabled
-  // and h2otemp field is available (only present when SurfaceCouplingImporter is active)
-  const Real* h2otemp_ptr = nullptr;
-  if (air_sea_surface_water_thermo_fixer) {
-    auto it = m_fields.find("h2otemp");
-    if (it != m_fields.end() && it->second.is_allocated()) {
-      const auto h2otemp = it->second.get_view<const Real*>();
-      h2otemp_ptr = h2otemp.data();
-    }
-  }
-  
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA (const KT::MemberType& team) {
 
     const int i = team.league_rank();
@@ -400,13 +382,6 @@ void MassAndEnergyConservationCheck::global_fixer(const bool air_sea_surface_wat
                                                    qv_i, qc_i, qr_i, ps(i), phis(i));
     Kokkos::single(Kokkos::PerTeam(team),[&]() {
       energy_change(i) = compute_energy_boundary_flux_on_column(vapor_flux(i), water_flux(i), ice_flux(i), heat_flux(i))*dt;
-      
-      // Add h2otemp contribution to energy change if air sea surface water thermo fixer is enabled
-      // NOTE: careful, operating on ptr, probably a good idea to move this to a view...
-      if (air_sea_surface_water_thermo_fixer && h2otemp_ptr != nullptr) {
-        energy_change(i) += h2otemp_ptr[i] * dt;
-      }
-      
       field_view_s1(i) = (current_energy(i)-new_energy_for_fixer-energy_change(i)) * area_view(i);
     });
   });
@@ -415,7 +390,7 @@ void MassAndEnergyConservationCheck::global_fixer(const bool air_sea_surface_wat
   field_version_s1.sync_to_host(); 
   eamxx_repro_sum(send, &recv, nlocal, ncount, MPI_Comm_c2f(m_comm.mpi_comm()));
   field_version_s1.sync_to_dev();
-  m_pb_fixer = recv;
+  pb_fixer = recv;
 
   if(print_debug_info) {
     //total energy needed for relative error
@@ -431,15 +406,14 @@ void MassAndEnergyConservationCheck::global_fixer(const bool air_sea_surface_wat
     eamxx_repro_sum(send, &recv, nlocal, ncount, MPI_Comm_c2f(m_comm.mpi_comm()));
     field_version_s1.sync_to_dev();
 
-    m_total_energy_before = recv;
+    total_energy_before = recv;
   }
 
   using PC = scream::physics::Constants<Real>;
   const Real cpdry = PC::Cpair;
-  m_pb_fixer /= (cpdry*m_total_gas_mass_after); // T change due to fixer
+  pb_fixer /= (cpdry*total_gas_mass_after); // T change due to fixer
 
   //add the fixer to temperature
-  const auto pb_fixer=m_pb_fixer;
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA (const KT::MemberType& team) {
     const int i = team.league_rank();
     const auto T_mid_i = ekat::subview(T_mid, i);
@@ -475,7 +449,7 @@ void MassAndEnergyConservationCheck::global_fixer(const bool air_sea_surface_wat
     eamxx_repro_sum(send, &recv, nlocal, ncount, MPI_Comm_c2f(m_comm.mpi_comm()));
     field_version_s1.sync_to_dev();
 
-    m_echeck = recv/m_total_energy_before;
+    echeck = recv/total_energy_before;
   }
 
 };//global_fixer
@@ -511,11 +485,10 @@ compute_gas_mass_on_column (const KT::MemberType&       team,
                             const int                   nlevs,
                             const uview_1d<const Real>& pseudo_density)
 {
-  using RU = ekat::ReductionUtils<DefaultDevice::execution_space>;
   using PC = scream::physics::Constants<Real>;
   const Real gravit = PC::gravit;
 
-  return RU::parallel_reduce<Real>(team, 0, nlevs,
+  return ExeSpaceUtils::parallel_reduce<Real>(team, 0, nlevs,
                                               [&] (const int lev, Real& local_mass) {
     local_mass += pseudo_density(lev)/gravit;
   });
@@ -585,15 +558,15 @@ compute_energy_boundary_flux_on_column (const Real vapor_flux,
 }
 
 Real MassAndEnergyConservationCheck::get_echeck() const{
-  return m_echeck;
+  return echeck;
 }
 
 Real MassAndEnergyConservationCheck::get_total_energy_before() const{
-  return m_total_energy_before;
+  return total_energy_before;
 }
 
 Real MassAndEnergyConservationCheck::get_pb_fixer() const{
-  return m_pb_fixer;
+  return pb_fixer;
 }
 
 
