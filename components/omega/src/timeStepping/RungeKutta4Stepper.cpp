@@ -79,8 +79,6 @@ void RungeKutta4Stepper::doStep(OceanState *State,   // model state
    Array3DReal NextTracerArray, CurTracerArray;
    Err = Tracers::getAll(CurTracerArray, CurLevel);
    Err = Tracers::getAll(NextTracerArray, NextLevel);
-   if (Err != 0)
-      ABORT_ERROR("RungeKutte4 doStep: error retrieving tracers.");
 
    for (int Stage = 0; Stage < NStages; ++Stage) {
       const TimeInstant StageTime = SimTime + RKC[Stage] * TimeStep;
@@ -132,7 +130,7 @@ void RungeKutta4Stepper::doStep(OceanState *State,   // model state
    Pacer::stop("RK4:haloExch", 3);
 
    // Advance the clock and update the simulation time
-   StepClock->advance();
+   Err     = StepClock->advance();
    SimTime = StepClock->getCurrentTime();
 }
 

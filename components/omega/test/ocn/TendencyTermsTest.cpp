@@ -15,6 +15,7 @@
 //
 //===-----------------------------------------------------------------------===/
 #include "TendencyTerms.h"
+#include "Config.h"
 #include "DataTypes.h"
 #include "Decomp.h"
 #include "Dimension.h"
@@ -289,12 +290,12 @@ struct TestSetupSphere {
    }
 
    KOKKOS_FUNCTION Real scalarC(Real Lon, Real Lat) const {
-      return -(Radius / 2) * std::sqrt(3 / 2 / Pi) * std::cos(Lat) *
+      return -(Radius / 2) * std::sqrt(3. / 2. / Pi) * std::cos(Lat) *
              std::cos(Lon);
    }
 
    KOKKOS_FUNCTION Real tracerHyperDiff(Real Lon, Real Lat) const {
-      return std::sqrt(3 / 2 / Pi) * std::cos(Lat) * std::cos(Lon) / Radius;
+      return std::sqrt(3. / 2. / Pi) * std::cos(Lat) * std::cos(Lon) / Radius;
    }
 
    KOKKOS_FUNCTION Real windForcingX(Real Lon, Real Lat,
@@ -1007,7 +1008,7 @@ void initTendTest(const std::string &MeshFile, int NVertLayers) {
    initLogging(DefEnv);
 
    // Open config file
-   Config("Omega");
+   Config::Initialize();
    Config::readAll("omega.yml");
 
    IO::init(DefComm);

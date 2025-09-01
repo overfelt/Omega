@@ -16,8 +16,7 @@
 #include "OceanState.h"
 #include "VertCoord.h"
 
-#include <functional>
-#include <memory>
+#include <cmath> // for std::copysign
 
 namespace OMEGA {
 
@@ -380,6 +379,69 @@ class TracerHorzAdvOnCell {
    Array1DReal DvEdge;
    Array1DReal AreaCell;
    Array2DReal EdgeMask;
+};
+
+// Tracer high order horizontal advection term
+class TracerHighOrderHorzAdvOnCell {
+ public:
+   bool Enabled = false;
+   // coefficient for blending high-order terms
+   Real coef3rdOrder = 0.25;
+
+   TracerHighOrderHorzAdvOnCell(const HorzMesh *Mesh);
+   void init(const HorzMesh *Mesh);
+
+   KOKKOS_FUNCTION void operator()(const Array3DReal &Tend, const I4 L,
+                                   const I4 ICell, const I4 KChunk,
+                                   const Array3DReal &TracerCell,
+                                   const Array2DReal &ThicknessFlux,
+                                   const Array3DReal &HTracersOnEdge) const {
+
+      const I4 KStart        = KChunk * VecLength;
+      const Real InvAreaCell = 1._Real / AreaCell(ICell);
+
+      for (int J = 0; J < NEdgesOnCell(ICell); ++J) {
+         const I4 JEdge = EdgesOnCell(ICell, J);
+         for (int KVec = 0; KVec < VecLength; ++KVec) {
+            const I4 K   = KStart + KVec;
+            Real HAdvTmp = 0;
+            if (AdvMaskHighOrder(K, JEdge)) {
+               for (int I = 0; I < NAdvCellsForEdge(JEdge); ++I) {
+                  const I4 KCell = AdvCellsForEdge(I, JEdge);
+                  const Real tracerWgt =
+                      (AdvCoefs(I, JEdge) +
+                       coef3rdOrder *
+                           std::copysign(1._Real, ThicknessFlux(K, JEdge)) *
+                           AdvCoefs3rd(I, JEdge)) *
+                      ThicknessFlux(K, JEdge);
+                  HAdvTmp -= tracerWgt * TracerCell(L, K, KCell);
+               }
+            } else {
+               const I4 JCell0      = CellsOnEdge(JEdge, 0);
+               const I4 JCell1      = CellsOnEdge(JEdge, 1);
+               const Real tracerWgt = DvEdge(JEdge) * ThicknessFlux(K, JEdge);
+               HAdvTmp -= tracerWgt * 0.5_Real *
+                          (TracerCell(L, JCell1, K) + TracerCell(L, JCell0, K));
+            }
+            Tend(L, ICell, K) -=
+                EdgeSignOnCell(ICell, J) * HAdvTmp * InvAreaCell;
+         }
+      }
+   }
+
+ private:
+   Array1DI4 NAdvCellsForEdge;
+   Array2DI4 AdvCellsForEdge;
+   Array2DI4 AdvMaskHighOrder;
+   Array2DReal AdvCoefs;
+   Array2DReal AdvCoefs3rd;
+
+   Array1DI4 NEdgesOnCell;
+   Array2DI4 EdgesOnCell;
+   Array2DI4 CellsOnEdge;
+   Array2DReal EdgeSignOnCell;
+   Array1DReal DvEdge;
+   Array1DReal AreaCell;
 };
 
 // Tracer horizontal diffusion term

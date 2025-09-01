@@ -300,7 +300,7 @@ I4 OceanState::getNormalVelocityH(HostArray2DReal &NormVelH,
 // TimeLevel == [1:new, 0:current, -1:previous, -2:two times ago, ...]
 I4 OceanState::copyToDevice(const I4 TimeLevel) {
 
-   I4 Err;
+   I4 Err = 0;
    I4 TimeIndex;
 
    Err = getTimeIndex(TimeIndex, TimeLevel);
@@ -316,7 +316,7 @@ I4 OceanState::copyToDevice(const I4 TimeLevel) {
 // TimeLevel == [1: new, 0:current, -1:previous, -2:two times ago, ...]
 I4 OceanState::copyToHost(const I4 TimeLevel) {
 
-   I4 Err;
+   I4 Err = 0;
    I4 TimeIndex;
 
    Err = getTimeIndex(TimeIndex, TimeLevel);
@@ -332,7 +332,7 @@ I4 OceanState::copyToHost(const I4 TimeLevel) {
 // TimeLevel == [1:new, 0:current, -1:previous, -2:two times ago, ...]
 I4 OceanState::exchangeHalo(const I4 TimeLevel) {
 
-   I4 Err;
+   I4 Err = 0;
    I4 TimeIndex;
    Err = getTimeIndex(TimeIndex, TimeLevel);
 

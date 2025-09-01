@@ -14,6 +14,8 @@
 #include "Pacer.h"
 #include "Tracers.h"
 
+#include <iostream>
+
 namespace OMEGA {
 
 Tendencies *Tendencies::DefaultTendencies = nullptr;
@@ -164,10 +166,21 @@ void Tendencies::readTendConfig(
       CHECK_ERROR_ABORT(Err, "Tendencies: DivFactor not found in TendConfig");
    }
 
-   Err += TendConfig->get("TracerHorzAdvTendencyEnable",
-                          this->TracerHorzAdv.Enabled);
-   CHECK_ERROR_ABORT(
-       Err, "Tendencies: TracerHorzAdvTendencyEnable not found in TendConfig");
+   if (TendConfig->existsVar("TracerHorzAdvTendencyEnable")) {
+      TendConfig->get("TracerHorzAdvTendencyEnable",
+                      this->TracerHorzAdv.Enabled);
+   } else if (TendConfig->existsVar("TracerHighOrderHorzAdvTendencyEnable")) {
+      TendConfig->get("TracerHighOrderHorzAdvTendencyEnable",
+                      this->TracerHighOrderHorzAdv.Enabled);
+   } else {
+      Err += TendConfig->get("TracerHorzAdvTendencyEnable",
+                             this->TracerHorzAdv.Enabled);
+      Err += TendConfig->get("TracerHighOrderHorzAdvTendencyEnable",
+                             this->TracerHighOrderHorzAdv.Enabled);
+      CHECK_ERROR_ABORT(
+          Err, "Tendencies: Neither TracerHorzAdvTendencyEnable nor "
+               "TracerHighOrderHorzAdvTendencyEnable found in TendConfig");
+   }
 
    Err += TendConfig->get("TracerDiffTendencyEnable",
                           this->TracerDiffusion.Enabled);
@@ -225,6 +238,7 @@ Tendencies::Tendencies(const std::string &Name, ///< [in] Name for tendencies
       SSHGrad(Mesh), VelocityDiffusion(Mesh), VelocityHyperDiff(Mesh),
       WindForcing(Mesh), BottomDrag(Mesh, VCoord), TracerHorzAdv(Mesh),
       TracerDiffusion(Mesh), TracerHyperDiff(Mesh),
+      TracerHighOrderHorzAdv(Mesh),
       CustomThicknessTend(InCustomThicknessTend),
       CustomVelocityTend(InCustomVelocityTend) {
 

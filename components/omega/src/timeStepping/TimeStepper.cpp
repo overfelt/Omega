@@ -384,8 +384,6 @@ void TimeStepper::updateThicknessByTend(OceanState *State1, int TimeLevel1,
    I4 Err;
    Err = State1->getLayerThickness(LayerThick1, TimeLevel1);
    Err = State2->getLayerThickness(LayerThick2, TimeLevel2);
-   if (Err != 0)
-      ABORT_ERROR("TimeStepper updateThickness: error retrieving layer thick");
    const auto &LayerThickTend = Tend->LayerThicknessTend;
    const int NVertLayers      = LayerThickTend.extent_int(1);
 
@@ -413,8 +411,6 @@ void TimeStepper::updateVelocityByTend(OceanState *State1, int TimeLevel1,
    I4 Err;
    Err = State1->getNormalVelocity(NormalVel1, TimeLevel1);
    Err = State2->getNormalVelocity(NormalVel2, TimeLevel2);
-   if (Err != 0)
-      ABORT_ERROR("TimeStepper updateVelocity: error retrieving velocity");
    const auto &NormalVelTend = Tend->NormalVelocityTend;
    const int NVertLayers     = NormalVelTend.extent_int(1);
 
@@ -448,6 +444,7 @@ void TimeStepper::updateTracersByTend(const Array3DReal &NextTracers,
                                       OceanState *State1, int TimeLevel1,
                                       OceanState *State2, int TimeLevel2,
                                       TimeInterval Coeff) const {
+   int Err = 0;
 
    const auto &LayerThick1 = State1->LayerThickness[TimeLevel1];
    const auto &LayerThick2 = State2->LayerThickness[TimeLevel2];
@@ -456,7 +453,7 @@ void TimeStepper::updateTracersByTend(const Array3DReal &NextTracers,
    const int NVertLayers   = TracerTend.extent(2);
 
    R8 CoeffSeconds;
-   Coeff.get(CoeffSeconds, TimeUnits::Seconds);
+   Err = Coeff.get(CoeffSeconds, TimeUnits::Seconds);
 
    parallelFor(
        "updateTracersByTend", {NTracers, Mesh->NCellsAll, NVertLayers},
@@ -497,7 +494,7 @@ void TimeStepper::accumulateTracersUpdate(const Array3DReal &AccumTracer,
    const int NVertLayers  = TracerTend.extent(2);
 
    R8 CoeffSeconds;
-   Coeff.get(CoeffSeconds, TimeUnits::Seconds);
+   int Err = Coeff.get(CoeffSeconds, TimeUnits::Seconds);
 
    parallelFor(
        "accumulateTracersUpdate", {NTracers, Mesh->NCellsAll, NVertLayers},

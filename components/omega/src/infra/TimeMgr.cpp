@@ -250,6 +250,7 @@ void TimeFrac::setSeconds(R8 Seconds) { // [in] floating point seconds
    I8 N; // numerator
    I8 D; // denominator
    R8 F = 0.0;
+   I4 I = 0;
    do {
       // Compute next convergent N/D
       A = (I8)R;
@@ -382,8 +383,12 @@ void TimeFrac::getHMS(I4 &Hours,           // [out] integer hours
 R8 TimeFrac::getSeconds(void) const { // \result Time in real seconds
 
    // check for divide-by-zero
-   if (Denom == 0)
-      ABORT_ERROR("TimeMgr: TimeFrac::getSeconds encountered 0 denominator.");
+   I4 Err{0};
+   if (Denom == 0) {
+      Err = 1;
+      LOG_ERROR("TimeMgr: encountered 0 denominator.");
+      return 0.0;
+   }
 
    // convert integer fractional seconds to real result
    return (R8)Whole + (R8)Numer / (R8)Denom;
@@ -397,8 +402,12 @@ R8 TimeFrac::getSeconds(void) const { // \result Time in real seconds
 R8 TimeFrac::getHours(void) const { // \result Time in real hours
 
    // check for divide-by-zero
-   if (Denom == 0)
-      ABORT_ERROR("TimeMgr: TimeFrac::getHours encountered 0 denominator.");
+   I4 Err{0};
+   if (Denom == 0) {
+      Err = 1;
+      LOG_ERROR("TimeMgr: encountered 0 denominator.");
+      return 0.0;
+   }
 
    // make local copy for manipulation
    TimeFrac TmpTime = *this;
@@ -420,8 +429,12 @@ R8 TimeFrac::getHours(void) const { // \result Time in real hours
 R8 TimeFrac::getMinutes(void) const { // \result Time in real minutes
 
    // check for divide-by-zero
-   if (Denom == 0)
-      ABORT_ERROR("TimeMgr: TimeFrac::getMinutes encountered 0 denominator.");
+   int Err{0};
+   if (Denom == 0) {
+      Err = 1;
+      LOG_ERROR("TimeMgr: encountered 0 denominator.");
+      return 0.0;
+   }
 
    // make local copy for manipulation
    TimeFrac TmpTime = *this;
@@ -1012,13 +1025,11 @@ std::unique_ptr<Calendar> Calendar::OmegaCal = nullptr;
 //-------------------------------------------------------------------------
 // Calendar::get - retrieves pointer to model calendar
 Calendar *Calendar::get() {
-
-   // Check for valid calendar
-   if (!isDefined())
-      ABORT_ERROR("TimeMgr: Attempt to retrieve undefined calendar");
-
-   return Calendar::OmegaCal.get();
-
+   if (isDefined()) {
+      return Calendar::OmegaCal.get();
+   } else {
+      LOG_CRITICAL("Attempt to retrieve undefined calendar");
+   }
 } // end retrieve calendar pointer
 
 //------------------------------------------------------------------------------
@@ -1044,15 +1055,16 @@ CalendarKind Calendar::getKind() {
 std::vector<I4> Calendar::getDaysPerMonth() {
 
    // check if calendar defined
-   if (!isDefined())
-      ABORT_ERROR("TimeMgr: Cannot retrieve DaysPerMonth"
-                  " - Calendar not initialized");
-
-   // also check for valid vector
-   if (Calendar::OmegaCal->DaysPerMonth.size() < 1)
-      ABORT_ERROR("TimeMgr: Invalid DaysPerMonth vector in Calendar");
-
-   return Calendar::OmegaCal->DaysPerMonth;
+   if (isDefined) {
+      // also check for valid vector
+      if (Calendar::OmegaCal->DaysPerMonth.size() > 0) {
+         return Calendar::OmegaCal->DaysPerMonth;
+      } else {
+         LOG_CRITICAL("Invalid DaysPerMonth vector");
+      }
+   } else {
+      LOG_CRITICAL("Cannot retrieve calendar props - Calendar not initialized");
+   }
 }
 
 I4 Calendar::getMonthsPerYear() {
@@ -1381,6 +1393,7 @@ TimeFrac Calendar::getElapsedTime(
    // initialize the basetime result, and common temps
    TimeFrac Result(0, 0, 1);
    I8 ResultWhole{0}; // whole seconds for result
+   I8 DayOfYear{0};   // day since beginning of year
    I8 JD{0};          // Julian Day used for many conversions
    I8 HourTmp{0};     // For half-day JD conversions
    I4 FebDays{0};     // For tracking leap days
@@ -1979,18 +1992,19 @@ TimeInterval::TimeInterval(
    Units       = InUnits;
    IsCalendar  = false;
    CalInterval = 0;
+   I4 Err{0};
 
    // Now set values based on input units
    I8 Length = InLength;
    switch (Units) {
    case TimeUnits::Seconds:
-      Interval.set(Length, 0, 1);
+      Err = Interval.set(Length, 0, 1);
       break;
    case TimeUnits::Minutes:
-      Interval.setHMS(0, Length, 0);
+      Err = Interval.setHMS(0, Length, 0);
       break;
    case TimeUnits::Hours:
-      Interval.setHMS(Length, 0, 0);
+      Err = Interval.setHMS(Length, 0, 0);
       break;
    case TimeUnits::Years:  // these three are all calendar
    case TimeUnits::Months: // intervals with the input length
@@ -2019,17 +2033,18 @@ TimeInterval::TimeInterval(
    Units       = InUnits;
    IsCalendar  = false;
    CalInterval = 0;
+   I4 Err{0};
 
    // Now set values based on input units
    switch (InUnits) {
    case TimeUnits::Seconds:
-      Interval.set(Length, 0, 1);
+      Err = Interval.set(Length, 0, 1);
       break;
    case TimeUnits::Minutes:
-      Interval.setHMS(0, Length, 0);
+      Err = Interval.setHMS(0, Length, 0);
       break;
    case TimeUnits::Hours:
-      Interval.setHMS(Length, 0, 0);
+      Err = Interval.setHMS(Length, 0, 0);
       break;
    case TimeUnits::Years:  // these three are all calendar
    case TimeUnits::Months: // intervals with the input length
@@ -2060,17 +2075,18 @@ TimeInterval::TimeInterval(
    Units       = InUnits;
    IsCalendar  = false;
    CalInterval = 0;
+   I4 Err{0};
 
    // Now set values based on input units
    switch (InUnits) {
    case TimeUnits::Seconds:
-      Interval.setSeconds(Length); // TimeFrac set
+      Err = Interval.setSeconds(Length); // TimeFrac set
       break;
    case TimeUnits::Minutes:
-      Interval.setMinutes(Length); // TimeFrac set
+      Err = Interval.setMinutes(Length); // TimeFrac set
       break;
    case TimeUnits::Hours:
-      Interval.setHours(Length); // TimeFrac set
+      Err = Interval.setHours(Length); // TimeFrac set
       break;
    case TimeUnits::Years:  // these three are all calendar
    case TimeUnits::Months: // intervals with the input length
@@ -3030,10 +3046,10 @@ bool TimeInterval::isPositive(void) {
    // make sure fraction is in proper form, particularly that the
    // whole and fraction have same sign and numerator and denomintator
    // have the same sign.
-   Interval.simplify();
+   I4 Err = Interval.simplify();
 
    // now retrieve fractional seconds and check components
-   Interval.get(W, N, D);
+   Err = Interval.get(W, N, D);
    if (W >= 0) { // whole part of seconds non-negative
       // only need check the numerator with simplified form
       if (N > 0)
@@ -3513,10 +3529,9 @@ std::string TimeInstant::getString(
    const char *FormatStr = Tmp.c_str();
 
    // now use sprintf to print to C string
-   I4 NChars =
-       sprintf(TimeStr, FormatStr, Year, Month, Day, Hour, Minute, Second);
-   if (NChars < 0)
-      ABORT_ERROR("TimeMgr: TimeInstant::getString error in sprintf");
+   Err = sprintf(TimeStr, FormatStr, Year, Month, Day, Hour, Minute, Second);
+   if (Err < 0)
+      LOG_ERROR("TimeMgr: TimeInstant::getString error in sprintf");
 
    // now convert C string to std::string for result
    std::string Result(TimeStr);

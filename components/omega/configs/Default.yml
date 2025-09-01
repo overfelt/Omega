@@ -43,7 +43,8 @@ Omega:
     Density0: 1026.0
     BottomDragTendencyEnable: false
     BottomDragCoeff: 0.0
-    TracerHorzAdvTendencyEnable: true
+    TracerHorzAdvTendencyEnable: false
+    TracerHighOrderHorzAdvTendencyEnable: true
     TracerDiffTendencyEnable: true
     EddyDiff2: 10.0
     TracerHyperDiffTendencyEnable: true
