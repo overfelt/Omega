@@ -56,13 +56,13 @@ SecondDerivativeOnCell::SecondDerivativeOnCell(HorzMesh const *Mesh)
 MasksAndCoefficients::MasksAndCoefficients(
     HorzMesh const *Mesh, const Array3DReal DerivTwo,
     Array1DI4 NAdvCellsForEdge, Array2DI4 AdvCellsForEdge,
-    Array2DI4 AdvMaskHighOrder, Array2DReal AdvCoefs, Array2DReal AdvCoefs3rd)
+    Array1DI4 AdvMaskHighOrder, Array2DReal AdvCoefs, Array2DReal AdvCoefs3rd)
     : NCellsGlobal(Mesh->NCellsGlobal), NCellsAll(Mesh->NCellsAll),
       NAdvCellsMax(Mesh->MaxEdges2), OmegaHash(Mesh->NEdgesAll),
       NAdvCellsForEdge(NAdvCellsForEdge), AdvCellsForEdge(AdvCellsForEdge),
       NEdgesOnEdge(Mesh->NEdgesOnEdge), NEdgesOnCell(Mesh->NEdgesOnCell),
-      CellIndx("CellIndx", Mesh->MaxEdges2 + 2),
-      CellIndxSorted("CellIndxSorted", 2, Mesh->MaxEdges2 + 2),
+      CellIndx("CellIndx", Mesh->NEdgesOwned, Mesh->MaxEdges2 + 2),
+      CellIndxSorted("CellIndxSorted", Mesh->NEdgesOwned, 2, Mesh->MaxEdges2 + 2),
       CellID(Mesh->CellID), AdvMaskHighOrder(AdvMaskHighOrder),
       EdgesOnEdge(Mesh->EdgesOnEdge), CellsOnCell(Mesh->CellsOnCell),
       CellsOnEdge(Mesh->CellsOnEdge), DcEdge(Mesh->DcEdge),

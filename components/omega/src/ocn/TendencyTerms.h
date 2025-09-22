@@ -17,6 +17,7 @@
 #include "VertCoord.h"
 
 #include <cmath> // for std::copysign
+#include <iostream>
 
 namespace OMEGA {
 
@@ -389,14 +390,13 @@ class TracerHighOrderHorzAdvOnCell {
    Real coef3rdOrder = 0.25;
 
    TracerHighOrderHorzAdvOnCell(const HorzMesh *Mesh);
-   void init(const HorzMesh *Mesh);
+   void init();
 
    KOKKOS_FUNCTION void operator()(const Array3DReal &Tend, const I4 L,
                                    const I4 ICell, const I4 KChunk,
                                    const Array3DReal &TracerCell,
                                    const Array2DReal &ThicknessFlux,
                                    const Array3DReal &HTracersOnEdge) const {
-
       const I4 KStart        = KChunk * VecLength;
       const Real InvAreaCell = 1._Real / AreaCell(ICell);
 
@@ -405,7 +405,7 @@ class TracerHighOrderHorzAdvOnCell {
          for (int KVec = 0; KVec < VecLength; ++KVec) {
             const I4 K   = KStart + KVec;
             Real HAdvTmp = 0;
-            if (AdvMaskHighOrder(K, JEdge)) {
+            if (AdvMaskHighOrder(JEdge)) {
                for (int I = 0; I < NAdvCellsForEdge(JEdge); ++I) {
                   const I4 KCell = AdvCellsForEdge(I, JEdge);
                   const Real tracerWgt =
@@ -425,14 +425,16 @@ class TracerHighOrderHorzAdvOnCell {
             }
             Tend(L, ICell, K) -=
                 EdgeSignOnCell(ICell, J) * HAdvTmp * InvAreaCell;
+if (!std::isfinite(Tend(L, ICell, K))) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR:"<< Tend(L, ICell, K)<<" "<< EdgeSignOnCell(ICell, J) <<" "<< HAdvTmp <<" "<< InvAreaCell<<std::endl;
          }
       }
    }
 
  private:
+   const HorzMesh *HorzontalMesh;
    Array1DI4 NAdvCellsForEdge;
    Array2DI4 AdvCellsForEdge;
-   Array2DI4 AdvMaskHighOrder;
+   Array1DI4 AdvMaskHighOrder;
    Array2DReal AdvCoefs;
    Array2DReal AdvCoefs3rd;
 

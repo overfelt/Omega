@@ -407,37 +407,92 @@ class SecondDerivativeOnCell {
 
 class MasksAndCoefficients {
 
+   KOKKOS_INLINE_FUNCTION static void swap(Array2DI4 &vec, const int m, const int n) {
+      for (int i : {0,1}) {
+         const I4 j = vec(i,m);
+         vec(i,m) = vec(i,n);
+         vec(i,n) = j;
+      }
+   }
+   // Sort the second dimension (values) of vec based on the first (keys):
+   //Array1DI4 keys   = Kokkos::subview(vec, 0, Kokkos::ALL);
+   //Array1DI4 values = Kokkos::subview(vec, 1, Kokkos::ALL);
+   KOKKOS_INLINE_FUNCTION static int partition(Array2DI4 &vec, const int low, const int high) {
+      // Selecting last element as the pivot
+      const I4 pivot = vec(0,high);
+      int i = (low - 1);
+      for (int j = low; j < high; ++j) {
+         if (vec(0,j) <= pivot) {
+            i++;
+            swap(vec, i, j);
+         }
+      }
+      // Put pivot to its position
+      swap(vec, i + 1, high);
+      // Return the point of partition
+      return (i + 1);
+   }
+
+   KOKKOS_INLINE_FUNCTION static void sort_by_key(Array2DI4 &vec, const int low, const int high) {
+      // Base case: This part will be executed till the starting
+      // index low is lesser than the ending index high
+      if (low < high) {
+         // pi is Partitioning Index, arr[p] is now at
+         // right place
+         const int pi = partition(vec, low, high);
+         // Separately sort elements before and after the
+         // Partition Index pi
+         sort_by_key(vec, low, pi - 1);
+         sort_by_key(vec, pi + 1, high);
+      }
+   }
+   KOKKOS_INLINE_FUNCTION static int search(Array1DI4 &vec, const I4 x)
+   {
+      int low = 0, high = vec.size()-1;
+      while (low <= high) {
+         const int mid = low + (high - low) / 2;
+         if (vec(mid) == x)
+            return mid;
+         else if (vec(mid) < x)
+            low = mid + 1;
+         else
+            high = mid - 1;
+      }
+      // If we reach here, then element was not present
+      return -1;
+   }
  public:
    MasksAndCoefficients(HorzMesh const *Mesh, const Array3DReal DerivTwo,
                         Array1DI4 NAdvCellsForEdge, Array2DI4 AdvCellsForEdge,
-                        Array2DI4 AdvMaskHighOrder, Array2DReal AdvCoefs,
+                        Array1DI4 AdvMaskHighOrder, Array2DReal AdvCoefs,
                         Array2DReal AdvCoefs3rd);
 
    KOKKOS_FUNCTION void operator()(int IEdge) const {
       NAdvCellsForEdge(IEdge) = 0;
-      const int Cell1         = CellsOnEdge(IEdge, 0);
-      const int Cell2         = CellsOnEdge(IEdge, 1);
+      auto CellIndex = Kokkos::subview(CellIndx, IEdge, Kokkos::ALL);
+      Array2DI4 CellIndexSorted = Kokkos::subview(CellIndxSorted, IEdge, Kokkos::ALL, Kokkos::ALL);
+      const int Cell1           = CellsOnEdge(IEdge, 0);
+      const int Cell2           = CellsOnEdge(IEdge, 1);
       // at boundaries, must stay at low order
-      for (int K = 0; K < NEdgesOnCell(Cell1); ++K)
-         AdvMaskHighOrder(IEdge, K) = 1;
+      AdvMaskHighOrder(IEdge) = 1;
       for (int K = 0; K < NEdgesOnCell(Cell1); ++K)
          if (CellsOnCell(Cell1, K) == NCellsGlobal)
-            AdvMaskHighOrder(K, IEdge) = 0;
+            AdvMaskHighOrder(IEdge) = 0;
 
       for (int K = 0; K < NEdgesOnCell(Cell2); ++K)
          if (CellsOnCell(Cell2, K) == NCellsGlobal)
-            AdvMaskHighOrder(IEdge, K) = 0;
+            AdvMaskHighOrder(IEdge) = 0;
       // do only if this edge flux is needed to update owned cells
       if (Cell1 < NCellsAll && Cell2 < NCellsAll) {
          // Insert cellsOnEdge to list of advection cells
          OmegaHash.insert(Cell1);
          OmegaHash.insert(Cell2);
-         CellIndx(0)          = Cell1;
-         CellIndx(1)          = Cell2;
-         CellIndxSorted(0, 0) = CellID(Cell1);
-         CellIndxSorted(1, 0) = Cell1;
-         CellIndxSorted(0, 1) = CellID(Cell2);
-         CellIndxSorted(1, 1) = Cell2;
+         CellIndex(0)          = Cell1;
+         CellIndex(1)          = Cell2;
+         CellIndexSorted(0, 0) = CellID(Cell1);
+         CellIndexSorted(1, 0) = Cell1;
+         CellIndexSorted(0, 1) = CellID(Cell2);
+         CellIndexSorted(1, 1) = Cell2;
          int N                = 2;
          // Build unique list of cells used for advection on edge
          // by expanding to the extended neighbor cells
@@ -445,9 +500,11 @@ class MasksAndCoefficients {
             if (Kokkos::UnorderedMapInvalidIndex ==
                 OmegaHash.find(CellsOnCell(I, Cell1))) {
                const I4 C           = CellsOnCell(I, Cell1);
-               CellIndx(N)          = C;
-               CellIndxSorted(0, N) = CellID(C);
-               CellIndxSorted(1, N) = C;
+if (CellIndex.extent(0) <= N) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
+               CellIndex(N)          = C;
+if (CellIndexSorted.extent(1) <= N) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
+               CellIndexSorted(0, N) = CellID(C);
+               CellIndexSorted(1, N) = C;
                OmegaHash.insert(C);
                ++N;
             }
@@ -456,22 +513,29 @@ class MasksAndCoefficients {
             if (Kokkos::UnorderedMapInvalidIndex ==
                 OmegaHash.find(CellsOnCell(I, Cell2))) {
                const I4 C           = CellsOnCell(I, Cell2);
-               CellIndx(N)          = C;
-               CellIndxSorted(0, N) = CellID(C);
-               CellIndxSorted(1, N) = C;
+if (CellIndex.extent(0) <= N) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
+               CellIndex(N)          = C;
+if (CellIndexSorted.extent(1) <= N) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
+               CellIndexSorted(0, N) = CellID(C);
+               CellIndexSorted(1, N) = C;
                OmegaHash.insert(C);
                ++N;
             }
          }
-         Array1DI4 keys   = Kokkos::subview(CellIndxSorted, 0, Kokkos::ALL);
-         Array1DI4 values = Kokkos::subview(CellIndxSorted, 1, Kokkos::ALL);
          // sort the cell indices by cellID
-         Kokkos::Experimental::sort_by_key(ExecSpace(), keys, values);
-         //  store local cell indices for high-order calculations
-         NAdvCellsForEdge(IEdge) = N;
-         for (int ICell = 0; ICell < NAdvCellsForEdge(IEdge); ++ICell)
-            AdvCellsForEdge(ICell, IEdge) = values(ICell);
+         sort_by_key(CellIndexSorted, 0, CellIndexSorted.extent(1)-1);
 
+
+         Array1DI4 keys   = Kokkos::subview(CellIndexSorted, 0, Kokkos::ALL);
+         Array1DI4 values = Kokkos::subview(CellIndexSorted, 1, Kokkos::ALL);
+         //  store local cell indices for high-order calculations
+if (NAdvCellsForEdge.extent(0) <= IEdge) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
+if (AdvCellsForEdge.extent(0) < N) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<AdvCellsForEdge.extent(0)<<" "<<N<<std::endl;
+if (AdvCellsForEdge.extent(1) <= IEdge) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
+if (values.extent(0) <= N) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
+         NAdvCellsForEdge(IEdge) = N;
+         for (int ICell = 0; ICell < N; ++ICell)
+            AdvCellsForEdge(ICell, IEdge) = values(ICell);
          // equation 7 in Skamarock, W. C., & Gassmann, A. (2011):
          // F(u,psi)_{i+1/2} = u_{i+1/2} *
          //  [   1/2 (psi_{i+1} + psi_i)                       term 1
@@ -489,7 +553,10 @@ class MasksAndCoefficients {
          // third-order flux function. The - sign in the derivTwo
          // accumulation is for the i+1 part of term 3, while
          // the + sign is for the i part.
-
+if (AdvCoefs.extent(0) < NAdvCellsMax) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
+if (AdvCoefs.extent(1) < IEdge) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
+if (AdvCoefs3rd.extent(0) < NAdvCellsMax) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
+if (AdvCoefs3rd.extent(1) < IEdge) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
          for (int I = 0; I < NAdvCellsMax; ++I) {
             AdvCoefs(I, IEdge)    = 0._Real;
             AdvCoefs3rd(I, IEdge) = 0._Real;
@@ -498,42 +565,28 @@ class MasksAndCoefficients {
          // from cell1
          Array1DI4 keys_edge = Kokkos::subview(
              keys, Kokkos::make_pair(0, NAdvCellsForEdge(IEdge)));
-         auto Iter = Kokkos::Experimental::search_n(
-             "Kokkos::search_n_0", ExecSpace(), keys_edge, 1, CellID(Cell1));
-         if (Iter < Kokkos::Experimental::end(keys_edge)) {
-            const auto I = Kokkos::Experimental::distance(
-                Iter, Kokkos::Experimental::end(keys_edge));
+	 int I = search(keys_edge, CellID(Cell1));
+	 if (-1 != I) {
             AdvCoefs(I, IEdge) += DerivTwo(0, 0, IEdge);
             AdvCoefs3rd(I, IEdge) += DerivTwo(0, 0, IEdge);
          }
          for (int ICell = 0; ICell < NEdgesOnCell(Cell1); ++ICell) {
-            auto Iter = Kokkos::Experimental::search_n(
-                "Kokkos::search_n_1", ExecSpace(), keys_edge, 1,
-                CellID(CellsOnCell(ICell, Cell1)));
-            if (Iter < Kokkos::Experimental::end(keys_edge)) {
-               const auto I = Kokkos::Experimental::distance(
-                   Iter, Kokkos::Experimental::end(keys_edge));
+	    I = search(keys_edge, CellID(CellsOnCell(ICell, Cell1)));
+	    if (-1 != I) {
                AdvCoefs(I, IEdge) += DerivTwo(ICell + 1, 0, IEdge);
                AdvCoefs3rd(I, IEdge) += DerivTwo(ICell + 1, 0, IEdge);
             }
          }
          // pull together third and fourth order contributions to the flux first
          // from cell2
-         Iter = Kokkos::Experimental::search_n(
-             "Kokkos::search_n_0", ExecSpace(), keys_edge, 1, CellID(Cell2));
-         if (Iter < Kokkos::Experimental::end(keys_edge)) {
-            const auto I = Kokkos::Experimental::distance(
-                Iter, Kokkos::Experimental::end(keys_edge));
+	 I = search(keys_edge, CellID(Cell2));
+	 if (-1 != I) {
             AdvCoefs(I, IEdge) += DerivTwo(0, 1, IEdge);
             AdvCoefs3rd(I, IEdge) -= DerivTwo(0, 1, IEdge);
          }
          for (int ICell = 0; ICell < NEdgesOnCell(Cell2); ++ICell) {
-            auto Iter = Kokkos::Experimental::search_n(
-                "Kokkos::search_n_1", ExecSpace(), keys_edge, 1,
-                CellID(CellsOnCell(ICell, Cell2)));
-            if (Iter < Kokkos::Experimental::end(keys_edge)) {
-               const auto I = Kokkos::Experimental::distance(
-                   Iter, Kokkos::Experimental::end(keys_edge));
+	    I = search(keys_edge, CellID(CellsOnCell(ICell, Cell2)));
+	    if (-1 != I) {
                AdvCoefs(I, IEdge) += DerivTwo(ICell + 1, 1, IEdge);
                AdvCoefs3rd(I, IEdge) -= DerivTwo(ICell + 1, 1, IEdge);
             }
@@ -544,18 +597,12 @@ class MasksAndCoefficients {
                 -DcEdge(IEdge) * DcEdge(IEdge) / 12._Real;
          }
          // 2nd order centered contribution place this in the main flux weights
-         Iter = Kokkos::Experimental::search_n(
-             "Kokkos::search_n_0", ExecSpace(), keys_edge, 1, CellID(Cell1));
-         if (Iter < Kokkos::Experimental::end(keys_edge)) {
-            const auto I = Kokkos::Experimental::distance(
-                Iter, Kokkos::Experimental::end(keys_edge));
+	 I = search(keys_edge, CellID(Cell1));
+	 if (-1 != I) {
             AdvCoefs(I, IEdge) += 0.5_Real;
          }
-         Iter = Kokkos::Experimental::search_n(
-             "Kokkos::search_n_0", ExecSpace(), keys_edge, 1, CellID(Cell2));
-         if (Iter < Kokkos::Experimental::end(keys_edge)) {
-            const auto I = Kokkos::Experimental::distance(
-                Iter, Kokkos::Experimental::end(keys_edge));
+	 I = search(keys_edge, CellID(Cell2));
+	 if (-1 != I) {
             AdvCoefs(I, IEdge) += 0.5_Real;
          }
          // multiply by edge length - thus the flux is just dt*ru times the
@@ -576,10 +623,10 @@ class MasksAndCoefficients {
    Array2DI4 AdvCellsForEdge;
    Array1DI4 NEdgesOnEdge;
    Array1DI4 NEdgesOnCell;
-   Array1DI4 CellIndx;
-   Array2DI4 CellIndxSorted;
+   Array2DI4 CellIndx;
+   Array3DI4 CellIndxSorted;
    Array1DI4 CellID;
-   Array2DI4 AdvMaskHighOrder;
+   Array1DI4 AdvMaskHighOrder;
    Array2DI4 EdgesOnEdge;
    Array2DI4 CellsOnCell;
    Array2DI4 CellsOnEdge;

@@ -71,7 +71,11 @@ void Tendencies::init() {
               CustomThickTend, CustomVelTend);
 
    DefaultTendencies->readTendConfig(&TendConfig);
-
+MachEnv *DefEnv = MachEnv::getDefault();
+const int pid = DefEnv->getMyTask();
+std::cout<<__FILE__<<":"<<__LINE__<<" "<<pid<<" DefaultTendencies->TracerHighOrderHorzAdv.Enabled:"<<DefaultTendencies->TracerHighOrderHorzAdv.Enabled<<std::endl;
+   if (DefaultTendencies->TracerHighOrderHorzAdv.Enabled)
+      DefaultTendencies->TracerHighOrderHorzAdv.init();
 } // end init
 
 //------------------------------------------------------------------------------
@@ -169,10 +173,12 @@ void Tendencies::readTendConfig(
    if (TendConfig->existsVar("TracerHorzAdvTendencyEnable")) {
       TendConfig->get("TracerHorzAdvTendencyEnable",
                       this->TracerHorzAdv.Enabled);
-   } else if (TendConfig->existsVar("TracerHighOrderHorzAdvTendencyEnable")) {
+   } 
+   if (TendConfig->existsVar("TracerHighOrderHorzAdvTendencyEnable")) {
       TendConfig->get("TracerHighOrderHorzAdvTendencyEnable",
                       this->TracerHighOrderHorzAdv.Enabled);
-   } else {
+   } 
+   if (!TendConfig->existsVar("TracerHorzAdvTendencyEnable") && !TendConfig->existsVar("TracerHighOrderHorzAdvTendencyEnable")) {
       Err += TendConfig->get("TracerHorzAdvTendencyEnable",
                              this->TracerHorzAdv.Enabled);
       Err += TendConfig->get("TracerHighOrderHorzAdvTendencyEnable",
@@ -448,6 +454,7 @@ void Tendencies::computeTracerTendenciesOnly(
 ) {
    OMEGA_SCOPE(LocTracerTend, TracerTend);
    OMEGA_SCOPE(LocTracerHorzAdv, TracerHorzAdv);
+   OMEGA_SCOPE(LocTracerHighOrderHorzAdv, TracerHighOrderHorzAdv);
    OMEGA_SCOPE(LocTracerDiffusion, TracerDiffusion);
    OMEGA_SCOPE(LocTracerHyperDiff, TracerHyperDiff);
 
@@ -458,6 +465,7 @@ void Tendencies::computeTracerTendenciesOnly(
    // compute tracer horizotal advection
    const Array2DReal &NormalVelEdge = State->NormalVelocity[VelTimeLevel];
    const Array3DReal &HTracersEdge  = AuxState->TracerAux.HTracersEdge;
+   const Array2DReal &ThickFluxEdge = AuxState->LayerThicknessAux.FluxLayerThickEdge;
    if (LocTracerHorzAdv.Enabled) {
       Pacer::start("Tend:tracerHorzAdv", 2);
       parallelFor(
@@ -467,6 +475,13 @@ void Tendencies::computeTracerTendenciesOnly(
                               HTracersEdge);
           });
       Pacer::stop("Tend:tracerHorzAdv", 2);
+   }
+   if (LocTracerHighOrderHorzAdv.Enabled) {
+      parallelFor(
+          {NTracers, NCellsAll, NChunks},
+          KOKKOS_LAMBDA(int L, int ICell, int KChunk) {
+             LocTracerHighOrderHorzAdv(LocTracerTend, L, ICell, KChunk, TracerArray, ThickFluxEdge, HTracersEdge);
+          });
    }
 
    // compute tracer diffusion
@@ -598,9 +613,6 @@ void Tendencies::computeAllTendencies(
     int VelTimeLevel,               ///< [in] Time level
     TimeInstant Time                ///< [in] Time
 ) {
-
-   Pacer::start("Tend:computeAllTendencies", 1);
-
    AuxState->computeAll(State, TracerArray, ThickTimeLevel, VelTimeLevel);
    computeThicknessTendenciesOnly(State, AuxState, ThickTimeLevel, VelTimeLevel,
                                   Time);
@@ -608,9 +620,6 @@ void Tendencies::computeAllTendencies(
                                  Time);
    computeTracerTendenciesOnly(State, AuxState, TracerArray, ThickTimeLevel,
                                VelTimeLevel, Time);
-
-   Pacer::stop("Tend:computeAllTendencies", 1);
-
 } // end all tendency compute
 
 } // end namespace OMEGA

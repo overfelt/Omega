@@ -61,12 +61,12 @@ TracerHorzAdvOnCell::TracerHorzAdvOnCell(const HorzMesh *Mesh)
 }
 
 TracerHighOrderHorzAdvOnCell::TracerHighOrderHorzAdvOnCell(const HorzMesh *Mesh)
-    : NAdvCellsForEdge("NumberOfCellsContribToAdvectionAtEdge",
+    : HorzontalMesh(Mesh),
+      NAdvCellsForEdge("NumberOfCellsContribToAdvectionAtEdge",
                        Mesh->NEdgesOwned),
-      AdvCellsForEdge("IndexOfCellsContributingToAdvection", Mesh->MaxEdges,
+      AdvCellsForEdge("IndexOfCellsContributingToAdvection", Mesh->MaxEdges2 + 2,
                       Mesh->NEdgesOwned),
-      AdvMaskHighOrder("MaskForHighOrderAdvectionTerms", Mesh->NEdgesAll,
-                       Mesh->MaxEdges),
+      AdvMaskHighOrder("MaskForHighOrderAdvectionTerms", Mesh->NEdgesAll),
       AdvCoefs("CommonAdvectionCoefficients", Mesh->MaxEdges2, Mesh->NEdgesAll),
       AdvCoefs3rd("CommonAdvectionCoeffsForHighOrder", Mesh->MaxEdges2,
                   Mesh->NEdgesAll),
@@ -74,7 +74,6 @@ TracerHighOrderHorzAdvOnCell::TracerHighOrderHorzAdvOnCell(const HorzMesh *Mesh)
       NEdgesOnCell(Mesh->NEdgesOnCell), EdgesOnCell(Mesh->EdgesOnCell),
       CellsOnEdge(Mesh->CellsOnEdge), EdgeSignOnCell(Mesh->EdgeSignOnCell),
       DvEdge(Mesh->DvEdge), AreaCell(Mesh->AreaCell) {
-   init(Mesh);
 }
 
 TracerDiffOnCell::TracerDiffOnCell(const HorzMesh *Mesh)
@@ -89,13 +88,13 @@ TracerHyperDiffOnCell::TracerHyperDiffOnCell(const HorzMesh *Mesh)
       DvEdge(Mesh->DvEdge), DcEdge(Mesh->DcEdge), AreaCell(Mesh->AreaCell),
       MeshScalingDel4(Mesh->MeshScalingDel4), EdgeMask(Mesh->EdgeMask) {}
 
-void TracerHighOrderHorzAdvOnCell::init(const HorzMesh *Mesh) {
+void TracerHighOrderHorzAdvOnCell::init() {
+   const HorzMesh *Mesh   = this->HorzontalMesh;
    const auto MaxEdges2   = Mesh->MaxEdges2;
    const auto NEdgesAll   = Mesh->NEdgesAll;
    const auto NCellsOwned = Mesh->NCellsOwned;
    const auto NEdgesOwned = Mesh->NEdgesOwned;
    // Allocate Kokkos arrays in member data
-
    SecondDerivativeOnCell secondDerivativeOnCell(Mesh);
    Array3DReal DerivTwo("DerivTwo", MaxEdges2, 2, NEdgesAll);
    parallelFor(
