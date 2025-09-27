@@ -8,6 +8,10 @@
 #include "Kokkos_Sort.hpp"
 #include "Kokkos_StdAlgorithms.hpp"
 #include "Kokkos_UnorderedMap.hpp"
+
+#include <fstream>
+#include <iostream>
+
 namespace OMEGA {
 
 class DivergenceOnCell {
@@ -433,24 +437,32 @@ class MasksAndCoefficients {
       return (i + 1);
    }
 
-   KOKKOS_INLINE_FUNCTION static void sort_by_key(Array2DI4 &vec, const int low, const int high) {
+   KOKKOS_INLINE_FUNCTION static void sort_by_key(Array2DI4 &vec, const I4 low, const I4 high) {
       // Base case: This part will be executed till the starting
       // index low is lesser than the ending index high
       if (low < high) {
-         // pi is Partitioning Index, arr[p] is now at
+         // pi is Partitioning Index, vec[pi] is now at
          // right place
-         const int pi = partition(vec, low, high);
+         const I4 pi = partition(vec, low, high);
          // Separately sort elements before and after the
          // Partition Index pi
          sort_by_key(vec, low, pi - 1);
          sort_by_key(vec, pi + 1, high);
       }
    }
-   KOKKOS_INLINE_FUNCTION static int search(Array1DI4 &vec, const I4 x)
+   KOKKOS_INLINE_FUNCTION static bool is_sorted(Array2DI4 &vec) {
+      bool sorted = true;
+      const I4 N = vec.extent(1)-1;
+      for (I4 I=0; I<N && sorted; ++I) 
+	 if (vec(0,I+1) < vec(0,I))
+	    sorted = false;
+      return sorted;
+   }
+   KOKKOS_INLINE_FUNCTION static I4 search(Array1DI4 &vec, const I4 x)
    {
-      int low = 0, high = vec.size()-1;
+      I4 low = 0, high = vec.extent(0)-1;
       while (low <= high) {
-         const int mid = low + (high - low) / 2;
+         const I4 mid = low + (high - low) / 2;
          if (vec(mid) == x)
             return mid;
          else if (vec(mid) < x)
@@ -461,15 +473,27 @@ class MasksAndCoefficients {
       // If we reach here, then element was not present
       return -1;
    }
+   KOKKOS_INLINE_FUNCTION static bool found_in_list(const Array1DI4 &List, const I4 N, const I4 X) 
+   {
+      bool found = false;
+      for (I4 I=0; I<N && !found; ++I)
+ 	 if (X == List(I)) 
+            found = true;	
+      return found;
+   }
  public:
    MasksAndCoefficients(HorzMesh const *Mesh, const Array3DReal DerivTwo,
                         Array1DI4 NAdvCellsForEdge, Array2DI4 AdvCellsForEdge,
                         Array1DI4 AdvMaskHighOrder, Array2DReal AdvCoefs,
                         Array2DReal AdvCoefs3rd);
 
-   KOKKOS_FUNCTION void operator()(int IEdge) const {
+   KOKKOS_FUNCTION void operator()(const int IEdge) const {
+
+      //Array1DI4 PatchCellList = Kokkos::subview(PatchCellLists, IEdge, Kokkos::ALL);
+      //for (I4 I=0; I< PatchCellList.extent(0)) 
+       //  PatchCellList[I] = -1;
       NAdvCellsForEdge(IEdge) = 0;
-      auto CellIndex = Kokkos::subview(CellIndx, IEdge, Kokkos::ALL);
+      Array1DI4 CellIndex = Kokkos::subview(CellIndx, IEdge, Kokkos::ALL);
       Array2DI4 CellIndexSorted = Kokkos::subview(CellIndxSorted, IEdge, Kokkos::ALL, Kokkos::ALL);
       const int Cell1           = CellsOnEdge(IEdge, 0);
       const int Cell2           = CellsOnEdge(IEdge, 1);
@@ -485,8 +509,8 @@ class MasksAndCoefficients {
       // do only if this edge flux is needed to update owned cells
       if (Cell1 < NCellsAll && Cell2 < NCellsAll) {
          // Insert cellsOnEdge to list of advection cells
-         OmegaHash.insert(Cell1);
-         OmegaHash.insert(Cell2);
+	 //insert_into_list(PatchCellList,Cell1);
+	 //insert_into_list(PatchCellList,Cell2);
          CellIndex(0)          = Cell1;
          CellIndex(1)          = Cell2;
          CellIndexSorted(0, 0) = CellID(Cell1);
@@ -497,42 +521,31 @@ class MasksAndCoefficients {
          // Build unique list of cells used for advection on edge
          // by expanding to the extended neighbor cells
          for (int I = 0; I < NEdgesOnCell(Cell1); ++I) {
-            if (Kokkos::UnorderedMapInvalidIndex ==
-                OmegaHash.find(CellsOnCell(I, Cell1))) {
-               const I4 C           = CellsOnCell(I, Cell1);
-if (CellIndex.extent(0) <= N) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
-               CellIndex(N)          = C;
-if (CellIndexSorted.extent(1) <= N) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
-               CellIndexSorted(0, N) = CellID(C);
-               CellIndexSorted(1, N) = C;
-               OmegaHash.insert(C);
+            const I4 CellOnCell = CellsOnCell(I, Cell1);
+            if (!found_in_list(CellIndex, N, CellOnCell))
+	    {
+               CellIndex(N)          = CellOnCell;
+               CellIndexSorted(0, N) = CellID(CellOnCell);
+               CellIndexSorted(1, N) = CellOnCell;
                ++N;
             }
          }
          for (int I = 0; I < NEdgesOnCell(Cell2); ++I) {
-            if (Kokkos::UnorderedMapInvalidIndex ==
-                OmegaHash.find(CellsOnCell(I, Cell2))) {
-               const I4 C           = CellsOnCell(I, Cell2);
-if (CellIndex.extent(0) <= N) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
-               CellIndex(N)          = C;
-if (CellIndexSorted.extent(1) <= N) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
-               CellIndexSorted(0, N) = CellID(C);
-               CellIndexSorted(1, N) = C;
-               OmegaHash.insert(C);
+            const I4 CellOnCell = CellsOnCell(I, Cell2);
+            if (!found_in_list(CellIndex, N, CellOnCell)) 
+	    {
+               CellIndex(N)          = CellOnCell;
+               CellIndexSorted(0, N) = CellID(CellOnCell);
+               CellIndexSorted(1, N) = CellOnCell;
                ++N;
             }
          }
          // sort the cell indices by cellID
          sort_by_key(CellIndexSorted, 0, CellIndexSorted.extent(1)-1);
 
-
          Array1DI4 keys   = Kokkos::subview(CellIndexSorted, 0, Kokkos::ALL);
          Array1DI4 values = Kokkos::subview(CellIndexSorted, 1, Kokkos::ALL);
          //  store local cell indices for high-order calculations
-if (NAdvCellsForEdge.extent(0) <= IEdge) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
-if (AdvCellsForEdge.extent(0) < N) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<AdvCellsForEdge.extent(0)<<" "<<N<<std::endl;
-if (AdvCellsForEdge.extent(1) <= IEdge) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
-if (values.extent(0) <= N) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
          NAdvCellsForEdge(IEdge) = N;
          for (int ICell = 0; ICell < N; ++ICell)
             AdvCellsForEdge(ICell, IEdge) = values(ICell);
@@ -553,10 +566,6 @@ if (values.extent(0) <= N) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::e
          // third-order flux function. The - sign in the derivTwo
          // accumulation is for the i+1 part of term 3, while
          // the + sign is for the i part.
-if (AdvCoefs.extent(0) < NAdvCellsMax) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
-if (AdvCoefs.extent(1) < IEdge) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
-if (AdvCoefs3rd.extent(0) < NAdvCellsMax) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
-if (AdvCoefs3rd.extent(1) < IEdge) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "<<std::endl;
          for (int I = 0; I < NAdvCellsMax; ++I) {
             AdvCoefs(I, IEdge)    = 0._Real;
             AdvCoefs3rd(I, IEdge) = 0._Real;
@@ -565,7 +574,7 @@ if (AdvCoefs3rd.extent(1) < IEdge) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "
          // from cell1
          Array1DI4 keys_edge = Kokkos::subview(
              keys, Kokkos::make_pair(0, NAdvCellsForEdge(IEdge)));
-	 int I = search(keys_edge, CellID(Cell1));
+	 I4 I = search(keys_edge, CellID(Cell1));
 	 if (-1 != I) {
             AdvCoefs(I, IEdge) += DerivTwo(0, 0, IEdge);
             AdvCoefs3rd(I, IEdge) += DerivTwo(0, 0, IEdge);
@@ -618,7 +627,7 @@ if (AdvCoefs3rd.extent(1) < IEdge) std::cout<<__FILE__<<":"<<__LINE__<<" ERROR "
    const I4 NCellsGlobal;
    const I4 NCellsAll;
    const I4 NAdvCellsMax;
-   Kokkos::UnorderedMap<int, int> OmegaHash;
+   Array2DI4 PatchCellLists;
    Array1DI4 NAdvCellsForEdge;
    Array2DI4 AdvCellsForEdge;
    Array1DI4 NEdgesOnEdge;

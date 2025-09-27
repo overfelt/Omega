@@ -71,9 +71,6 @@ void Tendencies::init() {
               CustomThickTend, CustomVelTend);
 
    DefaultTendencies->readTendConfig(&TendConfig);
-MachEnv *DefEnv = MachEnv::getDefault();
-const int pid = DefEnv->getMyTask();
-std::cout<<__FILE__<<":"<<__LINE__<<" "<<pid<<" DefaultTendencies->TracerHighOrderHorzAdv.Enabled:"<<DefaultTendencies->TracerHighOrderHorzAdv.Enabled<<std::endl;
    if (DefaultTendencies->TracerHighOrderHorzAdv.Enabled)
       DefaultTendencies->TracerHighOrderHorzAdv.init();
 } // end init

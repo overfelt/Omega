@@ -67,8 +67,8 @@ TracerHighOrderHorzAdvOnCell::TracerHighOrderHorzAdvOnCell(const HorzMesh *Mesh)
       AdvCellsForEdge("IndexOfCellsContributingToAdvection", Mesh->MaxEdges2 + 2,
                       Mesh->NEdgesOwned),
       AdvMaskHighOrder("MaskForHighOrderAdvectionTerms", Mesh->NEdgesAll),
-      AdvCoefs("CommonAdvectionCoefficients", Mesh->MaxEdges2, Mesh->NEdgesAll),
-      AdvCoefs3rd("CommonAdvectionCoeffsForHighOrder", Mesh->MaxEdges2,
+      AdvCoefs("CommonAdvectionCoefficients", Mesh->MaxEdges2+2, Mesh->NEdgesAll),
+      AdvCoefs3rd("CommonAdvectionCoeffsForHighOrder", Mesh->MaxEdges2+2,
                   Mesh->NEdgesAll),
 
       NEdgesOnCell(Mesh->NEdgesOnCell), EdgesOnCell(Mesh->EdgesOnCell),
@@ -95,8 +95,9 @@ void TracerHighOrderHorzAdvOnCell::init() {
    const auto NCellsOwned = Mesh->NCellsOwned;
    const auto NEdgesOwned = Mesh->NEdgesOwned;
    // Allocate Kokkos arrays in member data
+
    SecondDerivativeOnCell secondDerivativeOnCell(Mesh);
-   Array3DReal DerivTwo("DerivTwo", MaxEdges2, 2, NEdgesAll);
+   Array3DReal DerivTwo("DerivTwo", MaxEdges2+2, 2, NEdgesAll);
    parallelFor(
        {NCellsOwned},
        KOKKOS_LAMBDA(int ICell) { secondDerivativeOnCell(DerivTwo, ICell); });

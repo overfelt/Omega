@@ -79,7 +79,6 @@ static void readTimingConfig() {
 
 int ocnInit(MPI_Comm Comm ///< [in] ocean MPI communicator
 ) {
-
    I4 Err = 0; // return error code
 
    // Init the default machine environment based on input MPI communicator
@@ -107,9 +106,6 @@ int ocnInit(MPI_Comm Comm ///< [in] ocean MPI communicator
 
 // Call init routines for remaining Omega modules
 int initOmegaModules(MPI_Comm Comm) {
-int MyTask=0;
-MPI_Comm_rank(Comm, &MyTask);
-std::cout<<__FILE__<<":"<<__LINE__<<":"<<MyTask<<std::endl;
    // error and return codes
    int Err = 0;
 
@@ -159,18 +155,15 @@ std::cout<<__FILE__<<":"<<__LINE__<<":"<<MyTask<<std::endl;
    Error Err1;
    Error Err2;
 
-std::cout<<__FILE__<<":"<<__LINE__<<":"<<MyTask<<std::endl;
    // read from initial state if this is starting a new simulation
    Metadata ReqMeta; // no requested metadata for initial state
    Err1 = IOStream::read("InitialState", ModelClock, ReqMeta);
 
-std::cout<<__FILE__<<":"<<__LINE__<<":"<<MyTask<<std::endl;
    // read restart if starting from restart
    SimTimeStr                = " ";
    ReqMeta["SimulationTime"] = SimTimeStr;
    Err2 = IOStream::read("RestartRead", ModelClock, ReqMeta);
 
-std::cout<<__FILE__<<":"<<__LINE__<<":"<<MyTask<<std::endl;
    // One of the above two streams must be successful to initialize the
    // state and other fields used in the model
    if (Err1.isFail() and Err2.isFail()) {
@@ -179,7 +172,6 @@ std::cout<<__FILE__<<":"<<__LINE__<<":"<<MyTask<<std::endl;
       ABORT_ERROR("Error initializing ocean variables from input streams");
    }
 
-std::cout<<__FILE__<<":"<<__LINE__<<":"<<MyTask<<std::endl;
    // If reading from restart, reset the current time to the input time
    if (SimTimeStr != " ") {
       TimeInstant NewCurrentTime(SimTimeStr);
@@ -207,7 +199,6 @@ std::cout<<__FILE__<<":"<<__LINE__<<":"<<MyTask<<std::endl;
       ABORT_ERROR("Error updating tracer device arrays after restart");
    }
 
-std::cout<<__FILE__<<":"<<__LINE__<<":"<<MyTask<<std::endl;
    return Err;
 
 } // end initOmegaModules

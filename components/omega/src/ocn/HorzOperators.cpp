@@ -58,7 +58,7 @@ MasksAndCoefficients::MasksAndCoefficients(
     Array1DI4 NAdvCellsForEdge, Array2DI4 AdvCellsForEdge,
     Array1DI4 AdvMaskHighOrder, Array2DReal AdvCoefs, Array2DReal AdvCoefs3rd)
     : NCellsGlobal(Mesh->NCellsGlobal), NCellsAll(Mesh->NCellsAll),
-      NAdvCellsMax(Mesh->MaxEdges2), OmegaHash(Mesh->NEdgesAll),
+      NAdvCellsMax(Mesh->MaxEdges2), // PatchCellLists("PatchCellLists", Mesh->NEdgesOwned, Mesh->NEdgesAll+1),
       NAdvCellsForEdge(NAdvCellsForEdge), AdvCellsForEdge(AdvCellsForEdge),
       NEdgesOnEdge(Mesh->NEdgesOnEdge), NEdgesOnCell(Mesh->NEdgesOnCell),
       CellIndx("CellIndx", Mesh->NEdgesOwned, Mesh->MaxEdges2 + 2),
@@ -67,5 +67,5 @@ MasksAndCoefficients::MasksAndCoefficients(
       EdgesOnEdge(Mesh->EdgesOnEdge), CellsOnCell(Mesh->CellsOnCell),
       CellsOnEdge(Mesh->CellsOnEdge), DcEdge(Mesh->DcEdge),
       DvEdge(Mesh->DvEdge), AdvCoefs(AdvCoefs), AdvCoefs3rd(AdvCoefs3rd),
-      DerivTwo(DerivTwo) {}
+      DerivTwo(DerivTwo) { } 
 } // namespace OMEGA
