@@ -489,12 +489,17 @@ class MasksAndCoefficients {
 
    KOKKOS_FUNCTION void operator()(const int IEdge) const {
 
+MachEnv *DefEnv = MachEnv::getDefault();
+const int mytask = DefEnv->getMyTask();
       //Array1DI4 PatchCellList = Kokkos::subview(PatchCellLists, IEdge, Kokkos::ALL);
       //for (I4 I=0; I< PatchCellList.extent(0)) 
        //  PatchCellList[I] = -1;
       NAdvCellsForEdge(IEdge) = 0;
       Array1DI4 CellIndex = Kokkos::subview(CellIndx, IEdge, Kokkos::ALL);
       Array2DI4 CellIndexSorted = Kokkos::subview(CellIndxSorted, IEdge, Kokkos::ALL, Kokkos::ALL);
+      for (int I = 0; I < CellIndexSorted.extent(0); ++I) 
+         for (int K = 0; K < CellIndexSorted.extent(1); ++K) 
+	    CellIndexSorted(I,K) = MaxI4;
       const int Cell1           = CellsOnEdge(IEdge, 0);
       const int Cell2           = CellsOnEdge(IEdge, 1);
       // at boundaries, must stay at low order
@@ -521,7 +526,7 @@ class MasksAndCoefficients {
          // Build unique list of cells used for advection on edge
          // by expanding to the extended neighbor cells
          for (int I = 0; I < NEdgesOnCell(Cell1); ++I) {
-            const I4 CellOnCell = CellsOnCell(I, Cell1);
+            const I4 CellOnCell = CellsOnCell(Cell1, I);
             if (!found_in_list(CellIndex, N, CellOnCell))
 	    {
                CellIndex(N)          = CellOnCell;
@@ -531,7 +536,7 @@ class MasksAndCoefficients {
             }
          }
          for (int I = 0; I < NEdgesOnCell(Cell2); ++I) {
-            const I4 CellOnCell = CellsOnCell(I, Cell2);
+            const I4 CellOnCell = CellsOnCell(Cell2, I);
             if (!found_in_list(CellIndex, N, CellOnCell)) 
 	    {
                CellIndex(N)          = CellOnCell;
@@ -566,6 +571,7 @@ class MasksAndCoefficients {
          // third-order flux function. The - sign in the derivTwo
          // accumulation is for the i+1 part of term 3, while
          // the + sign is for the i part.
+
          for (int I = 0; I < NAdvCellsMax; ++I) {
             AdvCoefs(I, IEdge)    = 0._Real;
             AdvCoefs3rd(I, IEdge) = 0._Real;
@@ -574,56 +580,51 @@ class MasksAndCoefficients {
          // from cell1
          Array1DI4 keys_edge = Kokkos::subview(
              keys, Kokkos::make_pair(0, NAdvCellsForEdge(IEdge)));
-	 I4 I = search(keys_edge, CellID(Cell1));
-	 if (-1 != I) {
-            AdvCoefs(I, IEdge) += DerivTwo(0, 0, IEdge);
+	 if (const I4 I = search(keys_edge, CellID(Cell1)); -1 != I) {
+            AdvCoefs   (I, IEdge) += DerivTwo(0, 0, IEdge);
             AdvCoefs3rd(I, IEdge) += DerivTwo(0, 0, IEdge);
          }
          for (int ICell = 0; ICell < NEdgesOnCell(Cell1); ++ICell) {
-	    I = search(keys_edge, CellID(CellsOnCell(ICell, Cell1)));
-	    if (-1 != I) {
-               AdvCoefs(I, IEdge) += DerivTwo(ICell + 1, 0, IEdge);
+	    if (const I4 I = search(keys_edge, CellID(CellsOnCell(Cell1, ICell))); -1 != I) {
+               AdvCoefs   (I, IEdge) += DerivTwo(ICell + 1, 0, IEdge);
                AdvCoefs3rd(I, IEdge) += DerivTwo(ICell + 1, 0, IEdge);
             }
          }
          // pull together third and fourth order contributions to the flux first
          // from cell2
-	 I = search(keys_edge, CellID(Cell2));
-	 if (-1 != I) {
-            AdvCoefs(I, IEdge) += DerivTwo(0, 1, IEdge);
+	 if (const I4 I = search(keys_edge, CellID(Cell2));-1 != I) {
+            AdvCoefs   (I, IEdge) += DerivTwo(0, 1, IEdge);
             AdvCoefs3rd(I, IEdge) -= DerivTwo(0, 1, IEdge);
          }
          for (int ICell = 0; ICell < NEdgesOnCell(Cell2); ++ICell) {
-	    I = search(keys_edge, CellID(CellsOnCell(ICell, Cell2)));
-	    if (-1 != I) {
-               AdvCoefs(I, IEdge) += DerivTwo(ICell + 1, 1, IEdge);
+	    if (const I4 I = search(keys_edge, CellID(CellsOnCell(Cell2, ICell)));-1 != I) {
+               AdvCoefs   (I, IEdge) += DerivTwo(ICell + 1, 1, IEdge);
                AdvCoefs3rd(I, IEdge) -= DerivTwo(ICell + 1, 1, IEdge);
             }
          }
          for (int ICell = 0; ICell < NAdvCellsForEdge(IEdge); ++ICell) {
-            AdvCoefs(ICell, IEdge) *= -DcEdge(IEdge) * DcEdge(IEdge) / 12._Real;
-            AdvCoefs3rd(ICell, IEdge) *=
-                -DcEdge(IEdge) * DcEdge(IEdge) / 12._Real;
+            AdvCoefs   (ICell, IEdge) *= -DcEdge(IEdge) * DcEdge(IEdge) / 12._Real;
+            AdvCoefs3rd(ICell, IEdge) *= -DcEdge(IEdge) * DcEdge(IEdge) / 12._Real;
+
          }
          // 2nd order centered contribution place this in the main flux weights
-	 I = search(keys_edge, CellID(Cell1));
-	 if (-1 != I) {
+	 if (const I4 I = search(keys_edge, CellID(Cell1)); -1 != I) {
             AdvCoefs(I, IEdge) += 0.5_Real;
-         }
-	 I = search(keys_edge, CellID(Cell2));
-	 if (-1 != I) {
+	 }
+	 if (const I4 I = search(keys_edge, CellID(Cell2)); -1 != I) {
             AdvCoefs(I, IEdge) += 0.5_Real;
-         }
+	 }
          // multiply by edge length - thus the flux is just dt*ru times the
          // results of the vector-vector multiply
          for (int ICell = 0; ICell < NAdvCellsForEdge(IEdge); ++ICell) {
-            AdvCoefs(ICell, IEdge) *= DvEdge(IEdge);
+            AdvCoefs   (ICell, IEdge) *= DvEdge(IEdge);
             AdvCoefs3rd(ICell, IEdge) *= DvEdge(IEdge);
          }
       }
    }
 
  private:
+   const I4 MaxI4 = std::numeric_limits<I4>::max();
    const I4 NCellsGlobal;
    const I4 NCellsAll;
    const I4 NAdvCellsMax;

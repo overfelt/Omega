@@ -102,12 +102,15 @@ void TracerHighOrderHorzAdvOnCell::init() {
        {NCellsOwned},
        KOKKOS_LAMBDA(int ICell) { secondDerivativeOnCell(DerivTwo, ICell); });
    // Compute masks and coefficients
+   Kokkos::fence();
    MasksAndCoefficients masksAndCoefficients(Mesh, DerivTwo, NAdvCellsForEdge,
                                              AdvCellsForEdge, AdvMaskHighOrder,
                                              AdvCoefs, AdvCoefs3rd);
+   Kokkos::fence();
    parallelFor(
        {NEdgesOwned},
        KOKKOS_LAMBDA(int IEdge) { masksAndCoefficients(IEdge); });
+   Kokkos::fence();
 }
 } // end namespace OMEGA
 

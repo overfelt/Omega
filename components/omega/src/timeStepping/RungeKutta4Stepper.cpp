@@ -89,6 +89,7 @@ void RungeKutta4Stepper::doStep(OceanState *State,   // model state
       // q^{n+1} = q^{n} + dt * RKB[0] * R^{(0)}
       if (Stage == 0) {
          weightTracers(NextTracerArray, CurTracerArray, State, CurLevel);
+         std::cout<<__FILE__<<":"<<__LINE__<<std::endl;
          Tend->computeAllTendencies(State, AuxState, CurTracerArray, CurLevel,
                                     CurLevel, StageTime);
          updateStateByTend(State, NextLevel, State, CurLevel,
@@ -113,6 +114,7 @@ void RungeKutta4Stepper::doStep(OceanState *State,   // model state
             Pacer::stop("RK4:haloExchProvis", 3);
          }
 
+         std::cout<<__FILE__<<":"<<__LINE__<<std::endl;
          Tend->computeAllTendencies(ProvisState, AuxState, ProvisTracers,
                                     CurLevel, CurLevel, StageTime);
          updateStateByTend(State, NextLevel, State, NextLevel,

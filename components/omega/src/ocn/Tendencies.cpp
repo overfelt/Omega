@@ -460,9 +460,9 @@ void Tendencies::computeTracerTendenciesOnly(
    deepCopy(LocTracerTend, 0);
 
    // compute tracer horizotal advection
-   const Array2DReal &NormalVelEdge = State->NormalVelocity[VelTimeLevel];
-   const Array3DReal &HTracersEdge  = AuxState->TracerAux.HTracersEdge;
-   const Array2DReal &ThickFluxEdge = AuxState->LayerThicknessAux.FluxLayerThickEdge;
+   const Array2DReal &NormalVelEdge      = State->NormalVelocity[VelTimeLevel];
+   const Array3DReal &HTracersEdge       = AuxState->TracerAux.HTracersEdge;
+   const Array2DReal &FluxLayerThickEdge = AuxState->LayerThicknessAux.FluxLayerThickEdge;
    if (LocTracerHorzAdv.Enabled) {
       Pacer::start("Tend:tracerHorzAdv", 2);
       parallelFor(
@@ -477,7 +477,8 @@ void Tendencies::computeTracerTendenciesOnly(
       parallelFor(
           {NTracers, NCellsAll, NChunks},
           KOKKOS_LAMBDA(int L, int ICell, int KChunk) {
-             LocTracerHighOrderHorzAdv(LocTracerTend, L, ICell, KChunk, TracerArray, ThickFluxEdge, HTracersEdge);
+             LocTracerHighOrderHorzAdv(LocTracerTend, L, ICell, KChunk, TracerArray, 
+			     FluxLayerThickEdge, NormalVelEdge, HTracersEdge);
           });
    }
 
@@ -568,6 +569,7 @@ void Tendencies::computeTracerTendencies(
     int VelTimeLevel,               ///< [in] Time level
     TimeInstant Time                ///< [in] Time
 ) {
+std::cout<<__FILE__<<":"<<__LINE__<<std::endl;
    OMEGA_SCOPE(TracerAux, AuxState->TracerAux);
    OMEGA_SCOPE(LayerThickCell, State->LayerThickness[ThickTimeLevel]);
    OMEGA_SCOPE(NormalVelEdge, State->NormalVelocity[VelTimeLevel]);
@@ -610,6 +612,7 @@ void Tendencies::computeAllTendencies(
     int VelTimeLevel,               ///< [in] Time level
     TimeInstant Time                ///< [in] Time
 ) {
+std::cout<<__FILE__<<":"<<__LINE__<<std::endl;
    AuxState->computeAll(State, TracerArray, ThickTimeLevel, VelTimeLevel);
    computeThicknessTendenciesOnly(State, AuxState, ThickTimeLevel, VelTimeLevel,
                                   Time);
