@@ -372,7 +372,6 @@ const int mytask = DefEnv->getMyTask();
       for (int KVec = 0; KVec < VecLength; ++KVec) {
 	 const I4 K = KStart + KVec;
          Tend(L, ICell, K) -= HAdvTmp[KVec];
-//if (1==mytask && !L && !ICell && !K) std::cout<<__FILE__<<":"<<__LINE__<<" "<<mytask<<" "<<L<<" "<<ICell<<" "<<K<<" "<< Tend(L, ICell, K)<<" "<< HAdvTmp[KVec]<<std::endl;
       }
    }
 
@@ -396,55 +395,49 @@ class TracerHighOrderHorzAdvOnCell {
    TracerHighOrderHorzAdvOnCell(const HorzMesh *Mesh);
    void init();
 
-   KOKKOS_FUNCTION void operator()(const Array3DReal &Tend, const I4 L,
-                                   const I4 ICell, const I4 KChunk,
+   KOKKOS_FUNCTION void operator()(const I4 L, const I4 IEdge, const I4 KChunk,
                                    const Array3DReal &TracerCell,
                                    const Array2DReal &FluxLayerThickEdge,
-				   const Array2DReal &NormVelEdge,
-                                   const Array3DReal &HTracersOnEdge) const {
+				   const Array2DReal &NormVelEdge) const {
       const I4 KStart        = KChunk * VecLength;
-      const Real InvAreaCell = 1._Real / AreaCell(ICell);
-      const Array2DReal tracerCur = Kokkos::subview(TracerCell, L, Kokkos::ALL, Kokkos::ALL);
-MachEnv *DefEnv = MachEnv::getDefault();
-const int mytask = DefEnv->getMyTask();
-
-      Real HAdvTmp[VecLength] = {0};
-if (!ICell) std::cout<<__FILE__<<":"<<__LINE__<<" VecLength:"<<VecLength<<" EdgesOnCell:"<<NEdgesOnCell(ICell)<<std::endl;
-      for (int J = 0; J < NEdgesOnCell(ICell); ++J) {
-         const I4 JEdge = EdgesOnCell(ICell, J);
-	 const Real edgeSign =  EdgeSignOnCell(ICell, J);
-         if (AdvMaskHighOrder(JEdge)) {
-            for (int KVec = 0; KVec < VecLength; ++KVec) {
-               const I4 K = KStart + KVec;
-               for (int I = 0; I < NAdvCellsForEdge(JEdge); ++I) {
-                  const I4 KCell = AdvCellsForEdge(I, JEdge);
-		  const Real normalThicknessFlux = FluxLayerThickEdge(JEdge, K) * NormVelEdge(JEdge, K);
-                  const Real tracerWgt = (AdvCoefs(I, JEdge) + coef3rdOrder * 
-				  std::copysign(1._Real, FluxLayerThickEdge(JEdge, K)) *
-                                  AdvCoefs3rd(I, JEdge)) * normalThicknessFlux;
-                  HAdvTmp[KVec] += tracerWgt * tracerCur(KCell, K) * edgeSign;
-if (!ICell) std::cout<<__FILE__<<":"<<__LINE__<<" "<<JEdge<<" "<<std::setprecision(12)<<edgeSign<<" "<<tracerWgt<<" "<<tracerCur(KCell, K)<<" "<<normalThicknessFlux<<" "<<HAdvTmp[KVec]<<std::endl;
-               }
-	    }
-         } else {
-            for (int KVec = 0; KVec < VecLength; ++KVec) {
-               const I4 K           = KStart + KVec;
-               const I4 JCell0      = CellsOnEdge(JEdge, 0);
-               const I4 JCell1      = CellsOnEdge(JEdge, 1);
-	       const Real normalThicknessFlux = FluxLayerThickEdge(JEdge, K) * NormVelEdge(JEdge, K);
-               const Real tracerWgt = DvEdge(JEdge) * 0.5_Real * normalThicknessFlux;
-               HAdvTmp[KVec] += tracerWgt * (tracerCur(JCell1, K) + tracerCur(JCell0, K)) * edgeSign;
-if (!ICell) std::cout<<__FILE__<<":"<<__LINE__<<" "<<std::setprecision(12)<<edgeSign<<" "<<tracerWgt<<" "<<tracerCur(JCell0, K)<<" "<<normalThicknessFlux<<" "<<HAdvTmp[KVec]<<std::endl;
+      const I4 KEnd          = KStart + VecLength;
+      for (int K = KStart; K < KEnd; ++K) 
+         HighOrderFlxHorz(L, IEdge, K) = 0;
+      if (AdvMaskHighOrder(IEdge)) {
+         for (int I = 0; I < NAdvCellsForEdge(IEdge); ++I) {
+            const I4 ICell = AdvCellsForEdge(IEdge, I);
+            for (int K = KStart; K < KEnd; ++K) {
+               const Real normalThicknessFlux = FluxLayerThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
+               const Real tracerWgt = (AdvCoefs(I, IEdge) + coef3rdOrder * 
+             		  std::copysign(1._Real, normalThicknessFlux) *
+                               AdvCoefs3rd(I, IEdge)) * normalThicknessFlux;
+               HighOrderFlxHorz(L, IEdge, K) += tracerWgt * TracerCell(L, ICell, K);
             }
+         }
+      } else {
+         for (int K = KStart; K < KEnd; ++K) {
+            const I4 JCell0      = CellsOnEdge(IEdge, 0);
+            const I4 JCell1      = CellsOnEdge(IEdge, 1);
+            const Real normalThicknessFlux = FluxLayerThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
+            const Real tracerWgt = DvEdge(IEdge) * 0.5_Real * normalThicknessFlux;
+            HighOrderFlxHorz(L, IEdge, K) += tracerWgt * (TracerCell(L, JCell1, K) + TracerCell(L, JCell0, K));
+         }
+      }
+   }
+
+   KOKKOS_FUNCTION void operator()(const Array3DReal &Tend, 
+		                   const I4 L, const I4 ICell, const I4 KChunk) const {
+      const I4 KStart        = KChunk * VecLength;
+      const I4 KEnd          = KStart + VecLength;
+      const Real InvAreaCell = 1._Real / AreaCell(ICell);
+      for (int I=0; I < NEdgesOnCell(ICell); ++I) {
+         const I4 IEdge = EdgesOnCell(ICell, I);
+         for (int K = KStart; K < KEnd; ++K) {
+            Tend(L, ICell, K) +=  EdgeSignOnCell(ICell, I) * HighOrderFlxHorz(L, IEdge, K) * InvAreaCell;
 	 }
       }
-      double sumadv = 0;
-      for (int KVec = 0; KVec < VecLength; ++KVec) {
-         const I4 K   = KStart + KVec;
-         Tend(L, ICell, K) +=  HAdvTmp[KVec] * InvAreaCell;
-         sumadv += HAdvTmp[KVec];
-      }
-if (!ICell) std::cout<<__FILE__<<":"<<__LINE__<<" "<<L<<" "<<sumadv<<" "<< InvAreaCell<<" "<<std::setprecision(12)<<Tend(L, ICell, KStart)<<std::endl;
+//for (int K = KStart; K < KEnd; ++K) 
+//std::cout<<__FILE__<<":"<<__LINE__<<" "<<L<<" "<<ICell<<" "<<K<<" "<<std::setprecision(12)<<Tend(L, ICell, K)<<std::endl;
    }
 
  private:
@@ -454,6 +447,7 @@ if (!ICell) std::cout<<__FILE__<<":"<<__LINE__<<" "<<L<<" "<<sumadv<<" "<< InvAr
    Array1DI4 AdvMaskHighOrder;
    Array2DReal AdvCoefs;
    Array2DReal AdvCoefs3rd;
+   Array3DReal HighOrderFlxHorz;
 
    Array1DI4 NEdgesOnCell;
    Array2DI4 EdgesOnCell;

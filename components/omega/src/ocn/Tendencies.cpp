@@ -475,10 +475,15 @@ void Tendencies::computeTracerTendenciesOnly(
    }
    if (LocTracerHighOrderHorzAdv.Enabled) {
       parallelFor(
+          {NTracers, NEdgesAll, NChunks},
+          KOKKOS_LAMBDA(int L, int IEdge, int KChunk) {
+             LocTracerHighOrderHorzAdv(L, IEdge, KChunk, TracerArray, 
+			     FluxLayerThickEdge, NormalVelEdge);
+          });
+      parallelFor(
           {NTracers, NCellsAll, NChunks},
           KOKKOS_LAMBDA(int L, int ICell, int KChunk) {
-             LocTracerHighOrderHorzAdv(LocTracerTend, L, ICell, KChunk, TracerArray, 
-			     FluxLayerThickEdge, NormalVelEdge, HTracersEdge);
+             LocTracerHighOrderHorzAdv(LocTracerTend, L, ICell, KChunk);
           });
    }
 
@@ -569,7 +574,6 @@ void Tendencies::computeTracerTendencies(
     int VelTimeLevel,               ///< [in] Time level
     TimeInstant Time                ///< [in] Time
 ) {
-std::cout<<__FILE__<<":"<<__LINE__<<std::endl;
    OMEGA_SCOPE(TracerAux, AuxState->TracerAux);
    OMEGA_SCOPE(LayerThickCell, State->LayerThickness[ThickTimeLevel]);
    OMEGA_SCOPE(NormalVelEdge, State->NormalVelocity[VelTimeLevel]);
@@ -612,7 +616,6 @@ void Tendencies::computeAllTendencies(
     int VelTimeLevel,               ///< [in] Time level
     TimeInstant Time                ///< [in] Time
 ) {
-std::cout<<__FILE__<<":"<<__LINE__<<std::endl;
    AuxState->computeAll(State, TracerArray, ThickTimeLevel, VelTimeLevel);
    computeThicknessTendenciesOnly(State, AuxState, ThickTimeLevel, VelTimeLevel,
                                   Time);

@@ -64,16 +64,18 @@ TracerHighOrderHorzAdvOnCell::TracerHighOrderHorzAdvOnCell(const HorzMesh *Mesh)
     : HorzontalMesh(Mesh),
       NAdvCellsForEdge("NumberOfCellsContribToAdvectionAtEdge",
                        Mesh->NEdgesOwned),
-      AdvCellsForEdge("IndexOfCellsContributingToAdvection", Mesh->MaxEdges2 + 2,
-                      Mesh->NEdgesOwned),
+      AdvCellsForEdge("IndexOfCellsContributingToAdvection", 
+		      Mesh->NEdgesOwned, Mesh->MaxEdges2 + 2),
       AdvMaskHighOrder("MaskForHighOrderAdvectionTerms", Mesh->NEdgesAll),
       AdvCoefs("CommonAdvectionCoefficients", Mesh->MaxEdges2+2, Mesh->NEdgesAll),
       AdvCoefs3rd("CommonAdvectionCoeffsForHighOrder", Mesh->MaxEdges2+2,
                   Mesh->NEdgesAll),
-
+      HighOrderFlxHorz("HigherOrderHorizontalFlux",Tracers::getNumTracers(), Mesh->NEdgesAll,Mesh->NVertLevels/VecLength),
       NEdgesOnCell(Mesh->NEdgesOnCell), EdgesOnCell(Mesh->EdgesOnCell),
       CellsOnEdge(Mesh->CellsOnEdge), EdgeSignOnCell(Mesh->EdgeSignOnCell),
       DvEdge(Mesh->DvEdge), AreaCell(Mesh->AreaCell) {
+   deepCopy(HighOrderFlxHorz, 0);
+std::cout<<__FILE__<<":"<<__LINE__<<" "<<Tracers::getNumTracers()<<" "<< Mesh->NEdgesAll<<" "<<Mesh->NVertLevels/VecLength<<std::endl;
 }
 
 TracerDiffOnCell::TracerDiffOnCell(const HorzMesh *Mesh)

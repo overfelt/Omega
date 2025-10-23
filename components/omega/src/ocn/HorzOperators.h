@@ -553,7 +553,7 @@ const int mytask = DefEnv->getMyTask();
          //  store local cell indices for high-order calculations
          NAdvCellsForEdge(IEdge) = N;
          for (int ICell = 0; ICell < N; ++ICell)
-            AdvCellsForEdge(ICell, IEdge) = values(ICell);
+            AdvCellsForEdge(IEdge, ICell) = values(ICell);
          // equation 7 in Skamarock, W. C., & Gassmann, A. (2011):
          // F(u,psi)_{i+1/2} = u_{i+1/2} *
          //  [   1/2 (psi_{i+1} + psi_i)                       term 1
