@@ -351,13 +351,9 @@ class TracerHorzAdvOnCell {
 				   const Array2DReal &NormVelEdge,
                                    const Array3DReal &HTracersOnEdge) const {
 
-MachEnv *DefEnv = MachEnv::getDefault();
-const int mytask = DefEnv->getMyTask();
       const I4 KStart        = KChunk * VecLength;
       const Real InvAreaCell = 1._Real / AreaCell(ICell);
-
       Real HAdvTmp[VecLength] = {0};
-
       for (int J = 0; J < NEdgesOnCell(ICell); ++J) {
          const I4 JEdge = EdgesOnCell(ICell, J);
 
@@ -436,8 +432,6 @@ class TracerHighOrderHorzAdvOnCell {
             Tend(L, ICell, K) +=  EdgeSignOnCell(ICell, I) * HighOrderFlxHorz(L, IEdge, K) * InvAreaCell;
 	 }
       }
-//for (int K = KStart; K < KEnd; ++K) 
-//std::cout<<__FILE__<<":"<<__LINE__<<" "<<L<<" "<<ICell<<" "<<K<<" "<<std::setprecision(12)<<Tend(L, ICell, K)<<std::endl;
    }
 
  private:

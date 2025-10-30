@@ -212,14 +212,13 @@ class SecondDerivativeOnCell {
    */
  public:
    SecondDerivativeOnCell(HorzMesh const *Mesh);
-   virtual ~SecondDerivativeOnCell() {}
+   KOKKOS_FUNCTION ~SecondDerivativeOnCell() {}
    KOKKOS_FUNCTION void operator()(const Array3DReal &DerivTwo,
                                    int ICell) const {
       const int NEdges = NEdgesOnCell(ICell);
       if (MaxMaxEdges < NEdges)
-         LOG_ERROR("Error: Number of edges on cell:{} exceeds maximum "
-                   "expected:{} for cell:{}",
-                   NEdges, MaxMaxEdges, ICell);
+	 printf ("Error: Number of edges on cell:%d exceeds maximum "
+            "expected:%d for cell:%d", NEdges, MaxMaxEdges, ICell);
 
       // check to see if we are reaching outside the halo
       auto CellList = Kokkos::subview(CellListCell, ICell, Kokkos::ALL);
@@ -272,8 +271,8 @@ class SecondDerivativeOnCell {
  private:
    // MaxMaxEdges is used to dimention arrays that include ICell and the
    // neighbor cells, so it is technically one more than MaxEdges.
-   static constexpr I4 MaxMaxEdges = 10;
-   static constexpr R8 Pii         = 3.141592653589793_Real;
+   static const I4 MaxMaxEdges = 10;
+   static constexpr R8 Pii     = 3.141592653589793_Real;
 
    const bool OnSphere;
    const I4 NCellsAll;
@@ -489,8 +488,6 @@ class MasksAndCoefficients {
 
    KOKKOS_FUNCTION void operator()(const int IEdge) const {
 
-MachEnv *DefEnv = MachEnv::getDefault();
-const int mytask = DefEnv->getMyTask();
       //Array1DI4 PatchCellList = Kokkos::subview(PatchCellLists, IEdge, Kokkos::ALL);
       //for (I4 I=0; I< PatchCellList.extent(0)) 
        //  PatchCellList[I] = -1;
