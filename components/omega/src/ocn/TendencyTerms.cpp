@@ -75,7 +75,6 @@ TracerHighOrderHorzAdvOnCell::TracerHighOrderHorzAdvOnCell(const HorzMesh *Mesh)
       CellsOnEdge(Mesh->CellsOnEdge), EdgeSignOnCell(Mesh->EdgeSignOnCell),
       DvEdge(Mesh->DvEdge), AreaCell(Mesh->AreaCell) {
    deepCopy(HighOrderFlxHorz, 0);
-std::cout<<__FILE__<<":"<<__LINE__<<" "<<Tracers::getNumTracers()<<" "<< Mesh->NEdgesAll<<" "<<Mesh->NVertLevels/VecLength<<std::endl;
 }
 
 TracerDiffOnCell::TracerDiffOnCell(const HorzMesh *Mesh)
