@@ -57,7 +57,7 @@ HorzMesh::HorzMesh(const std::string &Name, //< [in] Name for new mesh
    MeshFileName = MeshDecomp->MeshFileName;
 
    // Set NVertLayers
-   NVertLayers = InNVertLayers;
+   NVertLayers = InNVertLevels;
 
    // Retrieve mesh cell/edge/vertex totals from Decomp
    NCellsHalo   = MeshDecomp->NCellsHalo;

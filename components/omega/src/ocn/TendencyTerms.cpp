@@ -12,10 +12,10 @@
 #include "AuxiliaryState.h"
 #include "DataTypes.h"
 #include "HorzMesh.h"
+#include "HorzOperators.h"
 #include "OceanState.h"
 #include "Tracers.h"
 #include "VertCoord.h"
-#include "HorzOperators.h"
 
 namespace OMEGA {
 
@@ -64,13 +64,15 @@ TracerHighOrderHorzAdvOnCell::TracerHighOrderHorzAdvOnCell(const HorzMesh *Mesh)
     : HorzontalMesh(Mesh),
       NAdvCellsForEdge("NumberOfCellsContribToAdvectionAtEdge",
                        Mesh->NEdgesOwned),
-      AdvCellsForEdge("IndexOfCellsContributingToAdvection", 
-		      Mesh->NEdgesOwned, Mesh->MaxEdges2 + 2),
+      AdvCellsForEdge("IndexOfCellsContributingToAdvection", Mesh->NEdgesOwned,
+                      Mesh->MaxEdges2 + 2),
       AdvMaskHighOrder("MaskForHighOrderAdvectionTerms", Mesh->NEdgesAll),
-      AdvCoefs("CommonAdvectionCoefficients", Mesh->MaxEdges2+2, Mesh->NEdgesAll),
-      AdvCoefs3rd("CommonAdvectionCoeffsForHighOrder", Mesh->MaxEdges2+2,
+      AdvCoefs("CommonAdvectionCoefficients", Mesh->MaxEdges2 + 2,
+               Mesh->NEdgesAll),
+      AdvCoefs3rd("CommonAdvectionCoeffsForHighOrder", Mesh->MaxEdges2 + 2,
                   Mesh->NEdgesAll),
-      HighOrderFlxHorz("HigherOrderHorizontalFlux",Tracers::getNumTracers(), Mesh->NEdgesAll,Mesh->NVertLevels/VecLength),
+      HighOrderFlxHorz("HigherOrderHorizontalFlux", Tracers::getNumTracers(),
+                       Mesh->NEdgesAll, Mesh->NVertLayers / VecLength),
       NEdgesOnCell(Mesh->NEdgesOnCell), EdgesOnCell(Mesh->EdgesOnCell),
       CellsOnEdge(Mesh->CellsOnEdge), EdgeSignOnCell(Mesh->EdgeSignOnCell),
       DvEdge(Mesh->DvEdge), AreaCell(Mesh->AreaCell) {
@@ -98,7 +100,7 @@ void TracerHighOrderHorzAdvOnCell::init() {
    // Allocate Kokkos arrays in member data
 
    SecondDerivativeOnCell secondDerivativeOnCell(Mesh);
-   Array3DReal DerivTwo("DerivTwo", MaxEdges2+2, 2, NEdgesAll);
+   Array3DReal DerivTwo("DerivTwo", MaxEdges2 + 2, 2, NEdgesAll);
    parallelFor(
        {NCellsOwned},
        KOKKOS_LAMBDA(int ICell) { secondDerivativeOnCell(DerivTwo, ICell); });
