@@ -882,8 +882,8 @@ int testTracerHorzAdvOnCell(int NVertLayers, int NTracers, Real RTol) {
    Array3DReal NumTrFluxDiv("NumTrFluxDiv", NTracers, Mesh->NCellsOwned,
                             NVertLayers);
    TracerHorzAdvOnCell TrHorzAdvOnC(Mesh, VCoord);
-   TrHorzAdvOnC.init();
    TrHorzAdvOnC.ForceLowOrder = true;
+   TrHorzAdvOnC.init();
 
    parallelFor(
        {NTracers, Mesh->NEdgesAll, NVertLayers},
