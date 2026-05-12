@@ -116,7 +116,7 @@ void testGradRichNum() {
    const auto Mesh     = HorzMesh::getDefault();
    const auto VCoord   = VertCoord::getDefault();
    VCoord->NVertLayers = NVertLayers;
-   I4 NCellsAll        = Mesh->NCellsAll;
+   I4 NCellsSize       = Mesh->NCellsSize;
    I4 NEdgesAll        = Mesh->NEdgesAll;
    OMEGA_SCOPE(ZMid, VCoord->ZMid);
    OMEGA_SCOPE(NEdgesOnCell, Mesh->NEdgesOnCell);
@@ -135,7 +135,7 @@ void testGradRichNum() {
    auto NormalVelEdge = Array2DReal("NormalVelEdge", NEdgesAll, NVertLayers);
    auto TangVelEdge   = Array2DReal("TangVelEdge", NEdgesAll, NVertLayers);
    auto BruntVaisalaFreqSqCell =
-       Array2DReal("BruntVaisalaFreqSqCell", NCellsAll, NVertLayers);
+       Array2DReal("BruntVaisalaFreqSqCell", NCellsSize, NVertLayers);
    /// Use deep copy to initialize results
    deepCopy(NormalVelEdge, NV);
    deepCopy(TangVelEdge, TV);
@@ -143,7 +143,7 @@ void testGradRichNum() {
    deepCopy(TestVertMix->GradRichNum, 0.0);
 
    parallelFor(
-       "populateArrays", {NCellsAll, NVertLayers},
+       "populateArrays", {Mesh->NCellsAll, NVertLayers},
        KOKKOS_LAMBDA(I4 ICell, I4 K) {
           ZMid(ICell, K)      = -K;
           NEdgesOnCell(ICell) = 5;
@@ -151,14 +151,14 @@ void testGradRichNum() {
        });
 
    parallelFor(
-       "setMinMax", {NCellsAll}, KOKKOS_LAMBDA(I4 ICell) {
+       "setMinMax", {Mesh->NCellsAll}, KOKKOS_LAMBDA(I4 ICell) {
           MinLayerCell(ICell) = 0;
           MaxLayerCell(ICell) = NVertLayers - 1;
        });
 
    // filling CellsOnCell with simple mapping for this test
    parallelFor(
-       "populateArrays", {NCellsAll}, KOKKOS_LAMBDA(I4 ICell) {
+       "populateArrays", {Mesh->NCellsAll}, KOKKOS_LAMBDA(I4 ICell) {
           CellsOnCell(ICell, 0) = ICell;
           CellsOnCell(ICell, 1) = ICell;
           CellsOnCell(ICell, 2) = ICell;
@@ -209,15 +209,6 @@ void testGradRichNum() {
 
    // If test fails, print bad values and abort
    if (NumMismatches != 0) {
-      auto GradRichNumH = createHostMirrorCopy(GradRichNum);
-      for (int I = 0; I < NCellsAll; ++I) {
-         for (int K = 0; K < NVertLayers; ++K) {
-            if (!isApprox(GradRichNumH(I, K), RiExpValue, RTol))
-               LOG_ERROR("TestVertMix: GradRichNum Bad Value: "
-                         "GradRichNum({},{}) = {}; Expected {}",
-                         I, K, GradRichNumH(I, K), RiExpValue);
-         }
-      }
       ABORT_ERROR("TestVertMix: GradRichNum FAIL with {} bad values",
                   NumMismatches);
    } else {
@@ -232,7 +223,7 @@ void testOneTwoOneFilter() {
    const auto Mesh     = HorzMesh::getDefault();
    const auto VCoord   = VertCoord::getDefault();
    VCoord->NVertLayers = NVertLayers;
-   I4 NCellsAll        = Mesh->NCellsAll;
+   I4 NCellsSize       = Mesh->NCellsSize;
    I4 NChunks          = VCoord->NVertLayers / VecLength;
    OMEGA_SCOPE(ZMid, VCoord->ZMid);
    OMEGA_SCOPE(MinLayerCell, VCoord->MinLayerCell);
@@ -243,8 +234,8 @@ void testOneTwoOneFilter() {
 
    /// Create and fill ocean state arrays
    auto GradRichNumSmoothed =
-       Array2DReal("GradRichNumSmoothed", NCellsAll, NVertLayers);
-   auto GradRichNum = Array2DReal("GradRichNum", NCellsAll, NVertLayers);
+       Array2DReal("GradRichNumSmoothed", NCellsSize, NVertLayers);
+   auto GradRichNum = Array2DReal("GradRichNum", NCellsSize, NVertLayers);
    /// Use deep copy to initialize results
    deepCopy(GradRichNumSmoothed, 1.0);
    deepCopy(GradRichNum, 1.0);
@@ -252,7 +243,7 @@ void testOneTwoOneFilter() {
    // Populate GradRichNum with alternating +1.0 and -1.0 values in vertical
    // GradRichNumSmoothed should smooth these to 0.0
    parallelFor(
-       "populateArrays", {NCellsAll, NVertLayers},
+       "populateArrays", {Mesh->NCellsAll, NVertLayers},
        KOKKOS_LAMBDA(I4 ICell, I4 K) {
           if (K % 2 == 0) {
              GradRichNum(ICell, K) = 1.0;
@@ -262,14 +253,14 @@ void testOneTwoOneFilter() {
        });
 
    parallelFor(
-       "setMinMax", {NCellsAll}, KOKKOS_LAMBDA(I4 ICell) {
+       "setMinMax", {Mesh->NCellsAll}, KOKKOS_LAMBDA(I4 ICell) {
           MinLayerCell(ICell) = 0;
           MaxLayerCell(ICell) = NVertLayers - 1;
        });
 
    // Apply the 1-2-1 filter to each cell
    parallelFor(
-       "ApplyOneTwoOneFilter", {NCellsAll, NChunks},
+       "ApplyOneTwoOneFilter", {Mesh->NCellsAll, NChunks},
        KOKKOS_LAMBDA(I4 ICell, I4 KChunk) {
           TestVertMix->ComputeOneTwoOneFilter(GradRichNumSmoothed, ICell,
                                               KChunk, GradRichNum);
@@ -310,28 +301,6 @@ void testOneTwoOneFilter() {
 
    // If test fails, print bad values and abort
    if (NumMismatches != 0) {
-      auto GradRichNumH         = createHostMirrorCopy(GradRichNum);
-      auto GradRichNumSmoothedH = createHostMirrorCopy(GradRichNumSmoothed);
-      for (int I = 0; I < NCellsAll; ++I) {
-         for (int K = 0; K < NVertLayers; ++K) {
-            if (K > MinLayerCell(I) && K < MaxLayerCell(I) - 1) {
-               // Interior layers should be smoothed to 0.0
-               if (!isApprox(GradRichNumSmoothedH(I, K), 0.0, RTol))
-                  LOG_ERROR("TestVertMix: GradRichNumSmoothed Bad Value: "
-                            "GradRichNumSmoothed({},{}) = {}; Expected {}",
-                            I, K, GradRichNumSmoothedH(I, K), 0.0);
-            } else {
-               // Boundary layers (K==0 or K==NVertLayers-1) should be copied
-               // from input
-               if (!isApprox(GradRichNumSmoothedH(I, K), GradRichNumH(I, K),
-                             RTol))
-                  LOG_ERROR("TestVertMix: GradRichNumSmoothed Bad Value: "
-                            "GradRichNumSmoothed({},{}) = {}; Expected {}",
-                            I, K, GradRichNumSmoothedH(I, K),
-                            GradRichNumH(I, K));
-            }
-         }
-      }
       ABORT_ERROR("TestVertMix: GradRichNumSmoothed FAIL with {} bad values",
                   NumMismatches);
    } else {
@@ -346,7 +315,8 @@ void testBackVertMix() {
    const auto Mesh     = HorzMesh::getDefault();
    const auto VCoord   = VertCoord::getDefault();
    VCoord->NVertLayers = NVertLayers;
-   I4 NCellsAll        = Mesh->NCellsAll;
+   I4 NCellsSize       = Mesh->NCellsSize;
+   I4 NEdgesSize       = Mesh->NEdgesSize;
    I4 NEdgesAll        = Mesh->NEdgesAll;
    OMEGA_SCOPE(GeomZMid, VCoord->GeomZMid);
 
@@ -354,10 +324,10 @@ void testBackVertMix() {
    VertMix *TestVertMix = VertMix::getInstance();
 
    /// Create and fill ocean state arrays
-   auto NormalVelEdge = Array2DReal("NormalVelEdge", NEdgesAll, NVertLayers);
-   auto TangVelEdge   = Array2DReal("TangVelEdge", NEdgesAll, NVertLayers);
+   auto NormalVelEdge = Array2DReal("NormalVelEdge", NEdgesSize, NVertLayers);
+   auto TangVelEdge   = Array2DReal("TangVelEdge", NEdgesSize, NVertLayers);
    auto BruntVaisalaFreqSqCell =
-       Array2DReal("BruntVaisalaFreqSqCell", NCellsAll, NVertLayers);
+       Array2DReal("BruntVaisalaFreqSqCell", NCellsSize, NVertLayers);
 
    /// Use deep copy initialize with reference or zero values
    deepCopy(NormalVelEdge, NV);
@@ -486,9 +456,9 @@ void testConvVertMix() {
 
    /// Create and fill ocean state arrays
    auto BruntVaisalaFreqSqIn =
-       Array2DReal("BruntVaisalaFreqSqIn", NCellsAll, NVertLayers);
-   auto VertDiffOut = Array2DReal("VertDiffOut", NCellsAll, NVertLayers);
-   auto VertViscOut = Array2DReal("VertViscOut", NCellsAll, NVertLayers);
+       Array2DReal("BruntVaisalaFreqSqIn", NCellsSize, NVertLayers);
+   auto VertDiffOut = Array2DReal("VertDiffOut", Mesh->NCellsAll, NVertLayers);
+   auto VertViscOut = Array2DReal("VertViscOut", Mesh->NCellsAll, NVertLayers);
 
    /// Use deep copy to initialize with the ref value
    deepCopy(BruntVaisalaFreqSqIn, 0.0);
@@ -498,7 +468,7 @@ void testConvVertMix() {
    // Populate arrays: positive BVF in lower half (conv off),
    // negative in upper half (conv on)
    parallelFor(
-       "populateArrays", {NCellsAll, NVertLayers},
+       "populateArrays", {Mesh->NCellsAll, NVertLayers},
        KOKKOS_LAMBDA(I4 ICell, I4 K) {
           if (K < 30) {
              BruntVaisalaFreqSqIn(ICell, K) = -0.2;
@@ -509,7 +479,7 @@ void testConvVertMix() {
 
    /// Compute only convective vertical viscosity and diffusivity
    parallelFor(
-       "ApplyVertMixConv", {NCellsAll, NChunks},
+       "ApplyVertMixConv", {Mesh->NCellsAll, NChunks},
        KOKKOS_LAMBDA(I4 ICell, I4 KChunk) {
           TestVertMix->ComputeVertMixConv(VertDiffOut, VertViscOut, ICell,
                                           KChunk, BruntVaisalaFreqSqIn);
@@ -551,30 +521,6 @@ void testConvVertMix() {
        NumMismatches);
 
    if (NumMismatches != 0) {
-      auto VertViscOutH = createHostMirrorCopy(VertViscOut);
-      for (int I = 0; I < NCellsAll; ++I) {
-         for (int K = 0; K < NVertLayers; ++K) {
-            if (K == 0) {
-               // Surface should be 0.0
-               if (!isApprox(VertViscOutH(I, K), 0.0_Real, RTol))
-                  LOG_ERROR("TestVertMixConv: VertVisc Bad Value: "
-                            "VertVisc({},{}) = {}; Expected {}",
-                            I, K, VertViscOutH(I, K), 0.0_Real);
-            } else if (K < 30) {
-               // Interior layers
-               if (!isApprox(VertViscOutH(I, K), VertConvExp, RTol))
-                  LOG_ERROR("TestVertMixConv: VertVisc Bad Value: "
-                            "VertVisc({},{}) = {}; Expected {}",
-                            I, K, VertViscOutH(I, K), VertConvExp);
-            } else {
-               // Interior layers
-               if (!isApprox(VertViscOutH(I, K), 0.0_Real, RTol))
-                  LOG_ERROR("TestVertMixConv: VertVisc Bad Value: "
-                            "VertVisc({},{}) = {}; Expected {}",
-                            I, K, VertViscOutH(I, K), 0.0_Real);
-            }
-         }
-      }
       ABORT_ERROR("TestVertMixConv: VertVisc FAIL with {} bad values",
                   NumMismatches);
    } else {
@@ -614,30 +560,6 @@ void testConvVertMix() {
        NumMismatches);
 
    if (NumMismatches != 0) {
-      auto VertDiffOutH = createHostMirrorCopy(VertDiffOut);
-      for (int I = 0; I < NCellsAll; ++I) {
-         for (int K = 0; K < NVertLayers; ++K) {
-            if (K == 0) {
-               // Surface should be 0.0
-               if (!isApprox(VertDiffOutH(I, K), 0.0_Real, RTol))
-                  LOG_ERROR("TestVertMixConv: VertDiff Bad Value: "
-                            "VertDiff({},{}) = {}; Expected {}",
-                            I, K, VertDiffOutH(I, K), 0.0_Real);
-            } else if (K < 30) {
-               // Interior layers
-               if (!isApprox(VertDiffOutH(I, K), VertConvExp, RTol))
-                  LOG_ERROR("TestVertMixConv: VertDiff Bad Value: "
-                            "VertDiff({},{}) = {}; Expected {}",
-                            I, K, VertDiffOutH(I, K), VertConvExp);
-            } else {
-               // Interior layers
-               if (!isApprox(VertDiffOutH(I, K), 0.0_Real, RTol))
-                  LOG_ERROR("TestVertMixConv: VertDiff Bad Value: "
-                            "VertDiff({},{}) = {}; Expected {}",
-                            I, K, VertDiffOutH(I, K), 0.0_Real);
-            }
-         }
-      }
       ABORT_ERROR("TestVertMixConv: VertDiff FAIL with {} bad values",
                   NumMismatches);
    } else {
@@ -652,7 +574,7 @@ void testShearVertMix() {
    const auto Mesh     = HorzMesh::getDefault();
    const auto VCoord   = VertCoord::getDefault();
    VCoord->NVertLayers = NVertLayers;
-   I4 NCellsAll        = Mesh->NCellsAll;
+   I4 NCellsSize       = Mesh->NCellsSize;
    I4 NChunks          = VCoord->NVertLayers / VecLength;
 
    /// Get VertMix instance to test
@@ -660,9 +582,9 @@ void testShearVertMix() {
 
    /// Create and fill ocean state arrays
    auto GradRichNumSmoothedIn =
-       Array2DReal("GradRichNumSmoothedIn", NCellsAll, NVertLayers);
-   auto VertDiffOut = Array2DReal("VertDiffOut", NCellsAll, NVertLayers);
-   auto VertViscOut = Array2DReal("VertViscOut", NCellsAll, NVertLayers);
+       Array2DReal("GradRichNumSmoothedIn", NCellsSize, NVertLayers);
+   auto VertDiffOut = Array2DReal("VertDiffOut", Mesh->NCellsAll, NVertLayers);
+   auto VertViscOut = Array2DReal("VertViscOut", Mesh->NCellsAll, NVertLayers);
 
    /// Use Kokkos::deep_copy to fill the entire view with the ref value
    deepCopy(GradRichNumSmoothedIn, 0.0);
@@ -687,7 +609,7 @@ void testShearVertMix() {
    /// Compute only shear vertical viscosity and diffusivity
    TestVertMix->ComputeVertMixShear.ShearExponent = 3.0;
    parallelFor(
-       "ApplyVertMixShear", {NCellsAll, NChunks},
+       "ApplyVertMixShear", {Mesh->NCellsAll, NChunks},
        KOKKOS_LAMBDA(I4 ICell, I4 KChunk) {
           TestVertMix->ComputeVertMixShear(VertDiffOut, VertViscOut, ICell,
                                            KChunk, GradRichNumSmoothedIn);
@@ -732,36 +654,6 @@ void testShearVertMix() {
        NumMismatches);
 
    if (NumMismatches != 0) {
-      auto VertViscOutH = createHostMirrorCopy(VertViscOut);
-      for (int I = 0; I < NCellsAll; ++I) {
-         for (int K = 0; K < NVertLayers; ++K) {
-            if (K == 0) {
-               // Surface should be 0.0
-               if (!isApprox(VertViscOutH(I, K), 0.0_Real, RTol))
-                  LOG_ERROR("TestVertMixShear: VertVisc Bad Value: "
-                            "VertVisc({},{}) = {}; Expected {}",
-                            I, K, VertViscOutH(I, K), 0.0_Real);
-            } else if (K < 20) {
-               // Interior layers
-               if (!isApprox(VertViscOutH(I, K), VertShearBaseExp, RTol))
-                  LOG_ERROR("TestVertMixShear: VertVisc Bad Value: "
-                            "VertVisc({},{}) = {}; Expected {}",
-                            I, K, VertViscOutH(I, K), VertShearBaseExp);
-            } else if (K >= 20 && K < 40) {
-               // Interior layers
-               if (!isApprox(VertViscOutH(I, K), VertShearExp, RTol))
-                  LOG_ERROR("TestVertMixShear: VertVisc Bad Value: "
-                            "VertVisc({},{}) = {}; Expected {}",
-                            I, K, VertViscOutH(I, K), VertShearExp);
-            } else {
-               // Interior layers
-               if (!isApprox(VertViscOutH(I, K), 0.0_Real, RTol))
-                  LOG_ERROR("TestVertMixShear: VertVisc Bad Value: "
-                            "VertVisc({},{}) = {}; Expected {}",
-                            I, K, VertViscOutH(I, K), 0.0_Real);
-            }
-         }
-      }
       ABORT_ERROR("TestVertMixShear: VertVisc FAIL with {} bad values",
                   NumMismatches);
    } else {
@@ -804,36 +696,6 @@ void testShearVertMix() {
        NumMismatches);
 
    if (NumMismatches != 0) {
-      auto VertDiffOutH = createHostMirrorCopy(VertDiffOut);
-      for (int I = 0; I < NCellsAll; ++I) {
-         for (int K = 0; K < NVertLayers; ++K) {
-            if (K == 0) {
-               // Surface should be 0.0
-               if (!isApprox(VertDiffOutH(I, K), 0.0_Real, RTol))
-                  LOG_ERROR("TestVertMixShear: VertDiff Bad Value: "
-                            "VertDiff({},{}) = {}; Expected {}",
-                            I, K, VertDiffOutH(I, K), 0.0_Real);
-            } else if (K < 20) {
-               // Interior layers
-               if (!isApprox(VertDiffOutH(I, K), VertShearBaseExp, RTol))
-                  LOG_ERROR("TestVertMixShear: VertDiff Bad Value: "
-                            "VertDiff({},{}) = {}; Expected {}",
-                            I, K, VertDiffOutH(I, K), VertShearBaseExp);
-            } else if (K >= 20 && K < 40) {
-               // Interior layers
-               if (!isApprox(VertDiffOutH(I, K), VertShearExp, RTol))
-                  LOG_ERROR("TestVertMixShear: VertDiff Bad Value: "
-                            "VertDiff({},{}) = {}; Expected {}",
-                            I, K, VertDiffOutH(I, K), VertShearExp);
-            } else {
-               // Interior layers
-               if (!isApprox(VertDiffOutH(I, K), 0.0_Real, RTol))
-                  LOG_ERROR("TestVertMixShear: VertDiff Bad Value: "
-                            "VertDiff({},{}) = {}; Expected {}",
-                            I, K, VertDiffOutH(I, K), 0.0_Real);
-            }
-         }
-      }
       ABORT_ERROR("TestVertMixShear: VertDiff FAIL with {} bad values",
                   NumMismatches);
    } else {
@@ -888,7 +750,7 @@ void testTotalVertMix() {
    // current mesh has some CellsOnCell value > NCellsAll, so
    // filling CellsOnCell with simple mapping for this test
    parallelFor(
-       "populateArrays", {NCellsAll}, KOKKOS_LAMBDA(I4 ICell) {
+       "populateArrays", {Mesh->NCellsAll}, KOKKOS_LAMBDA(I4 ICell) {
           CellsOnCell(ICell, 0) = ICell;
           CellsOnCell(ICell, 1) = ICell;
           CellsOnCell(ICell, 2) = ICell;
