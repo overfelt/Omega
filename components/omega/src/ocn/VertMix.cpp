@@ -199,7 +199,6 @@ void VertMix::computeVertMix(const Array2DReal &NormalVelocity,
                ComputeOneTwoOneFilter); /// Local view for 1-2-1 filter
    OMEGA_SCOPE(MinLayerCell, VCoord->MinLayerCell);
    OMEGA_SCOPE(MaxLayerCell, VCoord->MaxLayerCell);
-   // OMEGA_SCOPE(NVertLayers, VCoord->NVertLayers);
 
    /// Initialize VertDiff and VertVisc to background values
    deepCopy(LocVertDiff, BackDiff);
@@ -278,7 +277,6 @@ void VertMix::computeVertMix(const Array2DReal &NormalVelocity,
                  PerTeam(Team), INNER_LAMBDA() {
                     LocVertDiff(ICell, MinLayerCell(ICell)) = 0.0_Real;
                     LocVertVisc(ICell, MinLayerCell(ICell)) = 0.0_Real;
-                    // LocGradRichNum(ICell, KMin);
                     LocVertDiff(ICell, MaxLayerCell(ICell) + 1) =
                         LocVertDiff(ICell, KMax);
                     LocVertVisc(ICell, MaxLayerCell(ICell) + 1) =
@@ -309,7 +307,6 @@ void VertMix::computeVertMix(const Array2DReal &NormalVelocity,
                  PerTeam(Team), INNER_LAMBDA() {
                     LocVertDiff(ICell, MinLayerCell(ICell)) = 0.0_Real;
                     LocVertVisc(ICell, MinLayerCell(ICell)) = 0.0_Real;
-                    // LocGradRichNum(ICell, KMin);
                     LocVertDiff(ICell, MaxLayerCell(ICell) + 1) =
                         LocVertDiff(ICell, KMax);
                     LocVertVisc(ICell, MaxLayerCell(ICell) + 1) =

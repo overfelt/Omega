@@ -128,7 +128,6 @@ void testGradRichNum() {
    OMEGA_SCOPE(DcEdge, Mesh->DcEdge);
    OMEGA_SCOPE(DvEdge, Mesh->DvEdge);
    OMEGA_SCOPE(CellsOnCell, Mesh->CellsOnCell);
-   // OMEGA_SCOPE(CellsOnEdge, Mesh->CellsOnEdge);
    OMEGA_SCOPE(MinLayerCell, VCoord->MinLayerCell);
    OMEGA_SCOPE(MaxLayerCell, VCoord->MaxLayerCell);
 
@@ -277,7 +276,6 @@ void testOneTwoOneFilter() {
    VCoord->NVertLayersP1 = NVertLayersP1;
    I4 NCellsSize         = Mesh->NCellsSize;
    I4 NChunks            = VCoord->NVertLayers / VecLength;
-   // OMEGA_SCOPE(GeomZMid, VCoord->GeomZMid);
    OMEGA_SCOPE(MinLayerCell, VCoord->MinLayerCell);
    OMEGA_SCOPE(MaxLayerCell, VCoord->MaxLayerCell);
 
@@ -502,9 +500,7 @@ void testConvVertMix() {
    VCoord->NVertLayers   = NVertLayers;
    VCoord->NVertLayersP1 = NVertLayersP1;
    I4 NCellsSize         = Mesh->NCellsSize;
-   // I4 NEdgesAll          = Mesh->NEdgesAll;
-   // OMEGA_SCOPE(GeomZMid, VCoord->GeomZMid);
-   I4 NChunks = VCoord->NVertLayers / VecLength;
+   I4 NChunks            = VCoord->NVertLayers / VecLength;
 
    /// Get VertMix instance to test
    VertMix *TestVertMix = VertMix::getInstance();
@@ -843,7 +839,6 @@ void testTotalVertMix() {
 
    OMEGA_SCOPE(VertDiffP, TestVertMix->VertDiff);
    OMEGA_SCOPE(VertViscP, TestVertMix->VertVisc);
-   // OMEGA_SCOPE(GradRichNumSmoothed, TestVertMix->GradRichNumSmoothed);
 
    /// Check all VertDiff array values against expected value
    int NumMismatches = 0;
