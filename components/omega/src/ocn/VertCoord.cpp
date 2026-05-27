@@ -874,9 +874,10 @@ void VertCoord::setMasks() {
           const I4 KMax = LocMaxLyrEdgeTop(IEdge);
 
           parallelForInner(
-              Team, Range{KMin, KMax},
-              INNER_LAMBDA(int K) { LocEdgeMask(IEdge, K) = 1._Real;
-                                    LocBoundaryEdge(IEdge, K) = 0._Real;});
+              Team, Range{KMin, KMax}, INNER_LAMBDA(int K) {
+                 LocEdgeMask(IEdge, K)     = 1._Real;
+                 LocBoundaryEdge(IEdge, K) = 0._Real;
+              });
        });
 
    EdgeMaskH     = createHostMirrorCopy(EdgeMask);
