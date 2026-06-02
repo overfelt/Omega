@@ -41,7 +41,8 @@ Omega:
     ThicknessFluxTendencyEnable: true
     PVTendencyEnable: true
     KETendencyEnable: true
-    SSHTendencyEnable: true
+    # Only appropriate for shallow water (Omega v0) simulations
+    SSHTendencyEnable: false
     VelDiffTendencyEnable: true
     ViscDel2: 1.0e3
     VelHyperDiffTendencyEnable: true
