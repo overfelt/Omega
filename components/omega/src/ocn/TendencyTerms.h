@@ -163,6 +163,7 @@ class KEGradOnEdge {
 
 /// Gradient of sea surface height defined on edges multipled by gravitational
 /// acceleration, for momentum equation
+/// NOTE: This term is only appropriate for shallow water (Omega v0) simulations
 class SSHGradOnEdge {
  public:
    bool Enabled = false;
