@@ -64,6 +64,7 @@ class VertCoord {
    I4 VertexDegree;
    Array2DI4 CellsOnEdge;
    Array2DI4 CellsOnVertex;
+   Array2DI4 VerticesOnEdge;
 
    static VertCoord *DefaultVertCoord;
    static std::map<std::string, std::unique_ptr<VertCoord>> AllVertCoords;
@@ -151,6 +152,18 @@ class VertCoord {
                                 ///  done on vertex
    HostArray2DReal VertexMaskH; ///< Mask to determine if computations should be
                                 ///  done on vertex
+
+   Array2DReal BoundaryEdge; ///< Mask to determine boundary edges
+
+   HostArray2DReal BoundaryEdgeH; ///< Mask to determine boundary edges
+
+   Array2DReal BoundaryCell; ///< Mask to determine boundary cells
+
+   HostArray2DReal BoundaryCellH; ///< Mask to determine boundary cells
+
+   Array2DReal BoundaryVertex; ///< Mask to determine boundary vertex
+
+   HostArray2DReal BoundaryVertexH; ///< Mask to determine boundary vertex
 
    // BottomGeomDepth read from mesh file
    Array1DReal BottomGeomDepth;

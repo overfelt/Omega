@@ -135,8 +135,9 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
    VertexDegree   = Decomp->VertexDegree;
 
    // Retrieve connectivity arrays from Decomp
-   CellsOnEdge   = Decomp->CellsOnEdge;
-   CellsOnVertex = Decomp->CellsOnVertex;
+   CellsOnEdge    = Decomp->CellsOnEdge;
+   CellsOnVertex  = Decomp->CellsOnVertex;
+   VerticesOnEdge = Decomp->VerticesOnEdge;
 
    // Allocate device arrays
    MaxLayerCell    = Array1DI4("MaxLayerCell", NCellsSize);
@@ -854,26 +855,70 @@ void VertCoord::minMaxLayerVertex(Halo *MeshHalo) {
 // set computational masks for mesh elements
 void VertCoord::setMasks() {
 
-   EdgeMask = Array2DReal("EdgeMask", NEdgesSize, NVertLayers);
+   // EdgeMask & BoundaryEdge
+   EdgeMask     = Array2DReal("EdgeMask", NEdgesSize, NVertLayers);
+   BoundaryEdge = Array2DReal("BoundaryEdge", NEdgesSize, NVertLayers);
 
    OMEGA_SCOPE(LocEdgeMask, EdgeMask);
+   OMEGA_SCOPE(LocBoundaryEdge, BoundaryEdge);
    OMEGA_SCOPE(LocMinLyrEdgeBot, MinLayerEdgeBot);
    OMEGA_SCOPE(LocMaxLyrEdgeTop, MaxLayerEdgeTop);
 
    // EdgeMask = 1 if active layers on both sides, 0 otherwise.
+   // BoundaryEdge = 0 if active layers on both sides, 1 otherwise.
    deepCopy(EdgeMask, 0.);
+   deepCopy(BoundaryEdge, 1.);
    parallelForOuter(
        {NEdgesAll}, KOKKOS_LAMBDA(int IEdge, const TeamMember &Team) {
           const I4 KMin = LocMinLyrEdgeBot(IEdge);
           const I4 KMax = LocMaxLyrEdgeTop(IEdge);
 
           parallelForInner(
-              Team, Range{KMin, KMax},
-              INNER_LAMBDA(int K) { LocEdgeMask(IEdge, K) = 1._Real; });
+              Team, Range{KMin, KMax}, INNER_LAMBDA(int K) {
+                 LocEdgeMask(IEdge, K)     = 1._Real;
+                 LocBoundaryEdge(IEdge, K) = 0._Real;
+              });
        });
 
-   EdgeMaskH = createHostMirrorCopy(EdgeMask);
+   EdgeMaskH     = createHostMirrorCopy(EdgeMask);
+   BoundaryEdgeH = createHostMirrorCopy(BoundaryEdge);
 
+   // BoundaryCell & BoundaryVertex
+   //              = 1 in inactive layers, 0 otherwise.
+   BoundaryCell   = Array2DReal("BoundaryCell", NCellsSize, NVertLayers);
+   BoundaryVertex = Array2DReal("BoundaryVertex", NVerticesSize, NVertLayers);
+
+   OMEGA_SCOPE(LocBoundaryCell, BoundaryCell);
+   OMEGA_SCOPE(LocBoundaryVertex, BoundaryVertex);
+   OMEGA_SCOPE(LocCellsOnEdge, CellsOnEdge);
+   OMEGA_SCOPE(LocVerticesOnEdge, CellsOnEdge);
+   OMEGA_SCOPE(LocNVertLayers, NVertLayers);
+
+   deepCopy(BoundaryCell, 0.);
+   deepCopy(BoundaryVertex, 0.);
+
+   parallelForOuter(
+       {NEdgesAll}, KOKKOS_LAMBDA(int IEdge, const TeamMember &Team) {
+          const I4 JCell0   = LocCellsOnEdge(IEdge, 0);
+          const I4 JCell1   = LocCellsOnEdge(IEdge, 1);
+          const I4 JVertex0 = LocVerticesOnEdge(IEdge, 0);
+          const I4 JVertex1 = LocVerticesOnEdge(IEdge, 1);
+
+          parallelForInner(
+              Team, LocNVertLayers, INNER_LAMBDA(int K) {
+                 if (LocBoundaryEdge(IEdge, K) == 1._Real) {
+                    LocBoundaryCell(JCell0, K)     = 1._Real;
+                    LocBoundaryCell(JCell1, K)     = 1._Real;
+                    LocBoundaryVertex(JVertex0, K) = 1._Real;
+                    LocBoundaryVertex(JVertex1, K) = 1._Real;
+                 }
+              });
+       });
+
+   BoundaryCellH   = createHostMirrorCopy(BoundaryCell);
+   BoundaryVertexH = createHostMirrorCopy(BoundaryVertex);
+
+   // CellMask
    CellMask = Array2DReal("CellMask", NCellsSize, NVertLayers);
 
    OMEGA_SCOPE(LocCellMask, CellMask);
@@ -894,6 +939,7 @@ void VertCoord::setMasks() {
 
    CellMaskH = createHostMirrorCopy(CellMask);
 
+   // VertexMask
    VertexMask = Array2DReal("VertexMask", NVerticesSize, NVertLayers);
 
    OMEGA_SCOPE(LocVrtxMask, VertexMask);

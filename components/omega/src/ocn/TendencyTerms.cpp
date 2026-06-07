@@ -73,12 +73,13 @@ BottomDragOnEdge::BottomDragOnEdge(const HorzMesh *Mesh,
 
 TracerHorzAdvOnCell::TracerHorzAdvOnCell(const HorzMesh *Mesh,
                                          const VertCoord *VCoord)
-    : HorzontalMesh(Mesh),
+    : HorzontalMesh(Mesh), VerticalCoord(VCoord),
       NAdvCellsForEdge("NumberOfCellsContribToAdvectionAtEdge",
                        Mesh->NEdgesAll),
       AdvCellsForEdge("IndexOfCellsContributingToAdvection", Mesh->NEdgesAll,
                       Mesh->MaxEdges2 + 2),
-      AdvMaskHighOrder("MaskForHighOrderAdvectionTerms", Mesh->NEdgesAll),
+      AdvMaskHighOrder("MaskForHighOrderAdvectionTerms", Mesh->NEdgesAll,
+                       VCoord->NVertLayers),
       AdvCoefs("CommonAdvectionCoefficients", Mesh->MaxEdges2 + 2,
                Mesh->NEdgesAll),
       AdvCoefs3rd("CommonAdvectionCoeffsForHighOrder", Mesh->MaxEdges2 + 2,
@@ -115,11 +116,19 @@ SurfaceTracerRestoringOnCell::SurfaceTracerRestoringOnCell(
     const HorzMesh *Mesh) {}
 
 void TracerHorzAdvOnCell::init() {
-   const HorzMesh *Mesh = this->HorzontalMesh;
-   const auto MaxEdges2 = Mesh->MaxEdges2;
-   const auto NEdgesAll = Mesh->NEdgesAll;
-   const auto NCellsAll = Mesh->NCellsAll;
+   const HorzMesh *Mesh    = this->HorzontalMesh;
+   const VertCoord *VCoord = this->VerticalCoord;
+   const auto MaxEdges2    = Mesh->MaxEdges2;
+   const auto NEdgesAll    = Mesh->NEdgesAll;
+   const auto NCellsAll    = Mesh->NCellsAll;
    // Allocate Kokkos arrays in member data
+
+   if (ForceLowOrder) {
+      // Return when the 2nd-order tracer horz adv
+      deepCopy(NAdvCellsForEdge, 0);
+      deepCopy(AdvMaskHighOrder, 0);
+      return;
+   }
 
    SecondDerivativeOnCell secondDerivativeOnCell(Mesh);
    Array3DReal DerivTwo("DerivTwo", MaxEdges2 + 2, 2, NEdgesAll);
@@ -128,9 +137,9 @@ void TracerHorzAdvOnCell::init() {
        KOKKOS_LAMBDA(int ICell) { secondDerivativeOnCell(DerivTwo, ICell); });
    // Compute masks and coefficients
    Kokkos::fence();
-   MasksAndCoefficients masksAndCoefficients(Mesh, DerivTwo, NAdvCellsForEdge,
-                                             AdvCellsForEdge, AdvMaskHighOrder,
-                                             AdvCoefs, AdvCoefs3rd);
+   MasksAndCoefficients masksAndCoefficients(
+       Mesh, VCoord, DerivTwo, NAdvCellsForEdge, AdvCellsForEdge,
+       AdvMaskHighOrder, AdvCoefs, AdvCoefs3rd);
    Kokkos::fence();
    parallelFor(
        {NEdgesAll}, KOKKOS_LAMBDA(int IEdge) { masksAndCoefficients(IEdge); });

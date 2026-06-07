@@ -381,33 +381,35 @@ class TracerHorzAdvOnCell {
       const I4 KEnd   = KStart + VecLength;
       for (int K = KStart; K < KEnd; ++K)
          HighOrderFlxHorz(L, IEdge, K) = 0;
-      if (!ForceLowOrder && AdvMaskHighOrder(IEdge)) {
-         for (int I = 0; I < NAdvCellsForEdge(IEdge); ++I) {
-            const I4 ICell = AdvCellsForEdge(IEdge, I);
-            for (int K = KStart; K < KEnd; ++K) {
-               const Real NormalPseudoThicknessFlux =
-                   FluxPseudoThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
-               const Real TracerWgt =
-                   (AdvCoefs(I, IEdge) +
-                    Coef3rdOrder *
-                        std::copysign(1._Real, NormalPseudoThicknessFlux) *
-                        AdvCoefs3rd(I, IEdge)) *
-                   NormalPseudoThicknessFlux;
-               HighOrderFlxHorz(L, IEdge, K) +=
-                   TracerWgt * TracerCell(L, ICell, K);
-            }
-         }
-      } else {
+
+      // Stay at low order at boundaries
+      for (int K = KStart; K < KEnd; ++K) {
+         const I4 JCell0 = CellsOnEdge(IEdge, 0);
+         const I4 JCell1 = CellsOnEdge(IEdge, 1);
+         const Real NormalThicknessFlux =
+             FluxPseudoThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
+         const Real TracerWgt = DvEdge(IEdge) * 0.5_Real * NormalThicknessFlux;
+         HighOrderFlxHorz(L, IEdge, K) +=
+             TracerWgt * (1._Real - AdvMaskHighOrder(IEdge, K)) *
+             (TracerCell(L, JCell1, K) + TracerCell(L, JCell0, K));
+      }
+
+      // High order (3rd or 4th) fluxes elsewhere when requested
+      //    - If HorzTracerFluxOrder = 2, NAdvCellsForEdge = 0 and
+      //      this loop is skipped.
+      for (int I = 0; I < NAdvCellsForEdge(IEdge); ++I) {
+         const I4 ICell = AdvCellsForEdge(IEdge, I);
          for (int K = KStart; K < KEnd; ++K) {
-            const I4 JCell0 = CellsOnEdge(IEdge, 0);
-            const I4 JCell1 = CellsOnEdge(IEdge, 1);
-            const Real NormalPseudoThicknessFlux =
+            const Real NormalThicknessFlux =
                 FluxPseudoThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
             const Real TracerWgt =
-                DvEdge(IEdge) * 0.5_Real * NormalPseudoThicknessFlux;
-            HighOrderFlxHorz(L, IEdge, K) +=
-                TracerWgt *
-                (TracerCell(L, JCell1, K) + TracerCell(L, JCell0, K));
+                (AdvCoefs(I, IEdge) +
+                 Coef3rdOrder * std::copysign(1._Real, NormalThicknessFlux) *
+                     AdvCoefs3rd(I, IEdge)) *
+                NormalThicknessFlux;
+            HighOrderFlxHorz(L, IEdge, K) += TracerWgt *
+                                             TracerCell(L, ICell, K) *
+                                             AdvMaskHighOrder(IEdge, K);
          }
       }
    }
@@ -431,9 +433,10 @@ class TracerHorzAdvOnCell {
 
  private:
    const HorzMesh *HorzontalMesh;
+   const VertCoord *VerticalCoord;
    Array1DI4 NAdvCellsForEdge;
    Array2DI4 AdvCellsForEdge;
-   Array1DI4 AdvMaskHighOrder;
+   Array2DI4 AdvMaskHighOrder;
    Array2DReal AdvCoefs;
    Array2DReal AdvCoefs3rd;
    Array3DReal HighOrderFlxHorz;
