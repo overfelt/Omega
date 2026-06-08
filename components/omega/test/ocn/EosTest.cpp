@@ -772,6 +772,58 @@ void checkValueGswcN2() {
    return;
 }
 
+/// Test that the calcCtFreezing function returns the expected value
+void checkValueCtFreezing() {
+   const Real RTol = 1e-10;
+
+   Teos10Eos TestEos(VertCoord::getDefault());
+   constexpr Real SaturationFrac = 0.0;
+   constexpr Real P              = 500.0 * Db2Pa; // Convert dbar to Pa
+   constexpr Real Sa             = 32.0;
+
+   /// Get freezing temperature from GSW-C library
+   double CtFreezGswc = gsw_ct_freezing_poly(Sa, P * Pa2Db, SaturationFrac);
+   double CtFreez     = TestEos.calcCtFreezing(Sa, P * Pa2Db, SaturationFrac);
+
+   /// Check the value against the GSW-C value
+   bool Check = isApprox(CtFreezGswc, CtFreez, RTol);
+   if (!Check) {
+      ABORT_ERROR("checkValueCtFreezing: CtFreez FAIL, expected {}, got {}",
+                  CtFreezGswc, CtFreez);
+   }
+   return;
+}
+
+/// Test that the Eos CT-from-PT helper matches GSW-C
+void checkValueGswcCtFromPt() {
+   Eos *TestEos       = Eos::getInstance();
+   TestEos->EosChoice = EosType::Teos10Eos;
+
+   Real CtExpValue = gsw_ct_from_pt(Sa, Ct);
+   Real CtTeos     = TestEos->calcCtFromPt(Sa, Ct);
+   bool Check      = isApprox(CtTeos, CtExpValue, RTol);
+   if (!Check) {
+      ABORT_ERROR("checkValueGswcCtFromPt: Ct FAIL, expected {}, got {}",
+                  CtExpValue, CtTeos);
+   }
+   return;
+}
+
+/// Test that the Eos PT-from-CT helper matches GSW-C
+void checkValueGswcPtFromCt() {
+   Eos *TestEos       = Eos::getInstance();
+   TestEos->EosChoice = EosType::Teos10Eos;
+
+   Real PtExpValue = gsw_pt_from_ct(Sa, Ct);
+   Real PtTeos     = TestEos->calcPtFromCt(Sa, Ct);
+   bool Check      = isApprox(PtTeos, PtExpValue, RTol);
+   if (!Check) {
+      ABORT_ERROR("checkValueGswcPtFromCt: Pt FAIL, expected {}, got {}",
+                  PtExpValue, PtTeos);
+   }
+   return;
+}
+
 // the main tests (all in one to have the same log):
 // Single value test:
 // --> test calls the external GSW-C library
@@ -791,6 +843,9 @@ void eosTest(const std::string &MeshFile = "OmegaMesh.nc") {
 
    checkValueGswcSpecVol();
    checkValueGswcN2();
+   checkValueCtFreezing();
+   checkValueGswcCtFromPt();
+   checkValueGswcPtFromCt();
 
    testEosLinear();
    testEosLinearDisplaced();

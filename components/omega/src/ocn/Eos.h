@@ -239,6 +239,172 @@ class Teos10Eos {
       return V0;
    }
 
+   /// Calculate 2nd derivative of Gibbs wrt pot temp at ref P for TEOS-10
+   KOKKOS_FUNCTION Real calcGibbsDerivPt0Pt0(Real Sa, Real P) const {
+      Real x2 = Sfac * Sa;
+      Real x  = Kokkos::sqrt(x2);
+      Real y  = P * 0.025;
+
+      Real g03 =
+          -24715.571866078 +
+          y * (4420.4472249096725 +
+               y * (-1778.231237203896 +
+                    y * (1160.5182516851419 +
+                         y * (-569.531539542516 + y * 128.13429152494615))));
+
+      Real g08 =
+          x2 *
+          (1760.062705994408 +
+           x * (-86.1329351956084 +
+                x * (-137.1145018408982 +
+                     y * (296.20061691375236 +
+                          y * (-205.67709290374563 + 49.9394019139016 * y))) +
+                y * (-60.136422517125 + y * 10.50720794170734)) +
+           y * (-1351.605895580406 +
+                y * (1097.1125373015109 +
+                     y * (-433.20648175062206 + 63.905091254154904 * y))));
+
+      return ((g03 + g08) * 0.000625);
+   }
+
+   /// Calculate Pot Temmperature from Conservative Temp
+   KOKKOS_FUNCTION Real calcPtFromCt(Real Sa, Real Ct) const {
+      constexpr Real a0 = -1.446013646344788e-2;
+      constexpr Real a1 = -3.305308995852924e-3;
+      constexpr Real a2 = 1.062415929128982e-4;
+      constexpr Real a3 = 9.477566673794488e-1;
+      constexpr Real a4 = 2.166591947736613e-3;
+      constexpr Real a5 = 3.828842955039902e-3;
+      constexpr Real b0 = 1.000000000000000e0;
+      constexpr Real b1 = 6.506097115635800e-4;
+      constexpr Real b2 = 3.830289486850898e-3;
+      constexpr Real b3 = 1.247811760368034e-6;
+      Real a5ct, b3ct, ct_factor, pt_num, pt_recden, ct_diff;
+      Real pt, pt_old, ptm, dpt_dct, s1;
+
+      s1 = Sa / Psu2Gpkg;
+
+      a5ct = a5 * Ct;
+      b3ct = b3 * Ct;
+
+      ct_factor = (a3 + a4 * s1 + a5ct);
+      pt_num    = a0 + s1 * (a1 + a2 * s1) + Ct * ct_factor;
+      pt_recden = 1.0 / (b0 + b1 * s1 + Ct * (b2 + b3ct));
+      pt        = pt_num * pt_recden;
+
+      dpt_dct = pt_recden * (ct_factor + a5ct - (b2 + b3ct + b3ct) * pt);
+
+      ct_diff = calcCtFromPt(Sa, pt) - Ct;
+      pt_old  = pt;
+      pt      = pt_old - ct_diff * dpt_dct;
+      ptm     = 0.5 * (pt + pt_old);
+
+      dpt_dct = -Cp0Sw / ((ptm + TkFrz) * calcGibbsDerivPt0Pt0(Sa, ptm));
+
+      pt      = pt_old - ct_diff * dpt_dct;
+      ct_diff = calcCtFromPt(Sa, pt) - Ct;
+      pt_old  = pt;
+      return (pt_old - ct_diff * dpt_dct);
+   }
+
+   /// Calculate Conservative Temmperature from Potential Temp
+   KOKKOS_FUNCTION Real calcCtFromPt(Real Sa, Real Pt) const {
+      Real x2, x, y, pot_enthalpy;
+
+      x2 = Sfac * Sa;
+      x  = Kokkos::sqrt(x2);
+      y  = Pt * 0.025e0; /*! normalize for F03 and F08 */
+      pot_enthalpy =
+          61.01362420681071e0 +
+          y * (168776.46138048015e0 +
+               y * (-2735.2785605119625e0 +
+                    y * (2574.2164453821433e0 +
+                         y * (-1536.6644434977543e0 +
+                              y * (545.7340497931629e0 +
+                                   (-50.91091728474331e0 -
+                                    18.30489878927802e0 * y) *
+                                       y))))) +
+          x2 *
+              (268.5520265845071e0 +
+               y * (-12019.028203559312e0 +
+                    y * (3734.858026725145e0 +
+                         y * (-2046.7671145057618e0 +
+                              y * (465.28655623826234e0 +
+                                   (-0.6370820302376359e0 -
+                                    10.650848542359153e0 * y) *
+                                       y)))) +
+               x * (937.2099110620707e0 +
+                    y * (588.1802812170108e0 + y * (248.39476522971285e0 +
+                                                    (-3.871557904936333e0 -
+                                                     2.6268019854268356e0 * y) *
+                                                        y)) +
+                    x * (-1687.914374187449e0 +
+                         x * (246.9598888781377e0 +
+                              x * (123.59576582457964e0 -
+                                   48.5891069025409e0 * x)) +
+                         y * (936.3206544460336e0 +
+                              y * (-942.7827304544439e0 +
+                                   y * (369.4389437509002e0 +
+                                        (-33.83664947895248e0 -
+                                         9.987880382780322e0 * y) *
+                                            y))))));
+
+      return (pot_enthalpy / Cp0Sw);
+   }
+
+   /// Calculates freezing Conservative Temperature using TEOS-10 polynomial
+   /// (polynomial error in [-5e-4, 6e-4] K, from GSW package)
+   KOKKOS_FUNCTION Real calcCtFreezing(const Real Sa, const Real P,
+                                       const Real SaturationFract) const {
+      constexpr Real Sso = 35.16504;
+      constexpr Real C0  = 0.017947064327968736;
+      constexpr Real C1  = -6.076099099929818;
+      constexpr Real C2  = 4.883198653547851;
+      constexpr Real C3  = -11.88081601230542;
+      constexpr Real C4  = 13.34658511480257;
+      constexpr Real C5  = -8.722761043208607;
+      constexpr Real C6  = 2.082038908808201;
+      constexpr Real C7  = -7.389420998107497;
+      constexpr Real C8  = -2.110913185058476;
+      constexpr Real C9  = 0.2295491578006229;
+      constexpr Real C10 = -0.9891538123307282;
+      constexpr Real C11 = -0.08987150128406496;
+      constexpr Real C12 = 0.3831132432071728;
+      constexpr Real C13 = 1.054318231187074;
+      constexpr Real C14 = 1.065556599652796;
+      constexpr Real C15 = -0.7997496801694032;
+      constexpr Real C16 = 0.3850133554097069;
+      constexpr Real C17 = -2.078616693017569;
+      constexpr Real C18 = 0.8756340772729538;
+      constexpr Real C19 = -2.079022768390933;
+      constexpr Real C20 = 1.596435439942262;
+      constexpr Real C21 = 0.1338002171109174;
+      constexpr Real C22 = 1.242891021876471;
+
+      // Note: a = 0.502500117621 / Sso
+      constexpr Real A = 0.014289763856964;
+      constexpr Real B = 0.057000649899720;
+
+      Real Sar = Sa * 1.0e-2;
+      Real X   = Kokkos::sqrt(Sar);
+      Real Pr  = P * 1.0e-4;
+
+      Real CtFreez =
+          C0 + Sar * (C1 + X * (C2 + X * (C3 + X * (C4 + X * (C5 + C6 * X))))) +
+          Pr * (C7 + Pr * (C8 + C9 * Pr)) +
+          Sar * Pr *
+              (C10 + Pr * (C12 + Pr * (C15 + C21 * Sar)) +
+               Sar * (C13 + C17 * Pr + C19 * Sar) +
+               X * (C11 + Pr * (C14 + C18 * Pr) +
+                    Sar * (C16 + C20 * Pr + C22 * Sar)));
+
+      /* Adjust for the effects of dissolved air */
+      CtFreez = CtFreez - SaturationFract * (1e-3) * (2.4 - A * Sa) *
+                              (1.0 + B * (1.0 - Sa / Sso));
+
+      return CtFreez;
+   }
+
  private:
    Array1DI4 MinLayerCell;
    Array1DI4 MaxLayerCell;
@@ -597,6 +763,13 @@ class Eos {
                                   const Array2DReal &AbsSalinity,
                                   const Array2DReal &Pressure,
                                   const Array2DReal &SpecVol);
+
+   /// Convert Conservative Temperature to potential temperature
+   Real calcPtFromCt(const Real &Sa, const Real &Ct) const;
+
+   /// Convert potential temperature to Conservative Temperature
+   Real calcCtFromPt(const Real &Sa, const Real &Pt) const;
+
    /// Initialize EOS from config and mesh
    static void init();
 
