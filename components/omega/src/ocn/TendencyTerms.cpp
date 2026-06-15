@@ -11,6 +11,7 @@
 #include "TendencyTerms.h"
 #include "AuxiliaryState.h"
 #include "DataTypes.h"
+#include "Error.h"
 #include "HorzMesh.h"
 #include "HorzOperators.h"
 #include "OceanState.h"
@@ -74,6 +75,7 @@ BottomDragOnEdge::BottomDragOnEdge(const HorzMesh *Mesh,
 TracerHorzAdvOnCell::TracerHorzAdvOnCell(const HorzMesh *Mesh,
                                          const VertCoord *VCoord)
     : HorzontalMesh(Mesh), VerticalCoord(VCoord),
+      NVertLayers(VCoord->NVertLayers),
       NAdvCellsForEdge("NumberOfCellsContribToAdvectionAtEdge",
                        Mesh->NEdgesAll),
       AdvCellsForEdge("IndexOfCellsContributingToAdvection", Mesh->NEdgesAll,
@@ -138,12 +140,22 @@ void TracerHorzAdvOnCell::init() {
    // Compute masks and coefficients
    Kokkos::fence();
    MasksAndCoefficients masksAndCoefficients(
-       Mesh, VCoord, DerivTwo, NAdvCellsForEdge, AdvCellsForEdge,
+       Mesh, VCoord, DerivTwo, NAdvCellsForEdge, AdvCellsForEdge, 
        AdvMaskHighOrder, AdvCoefs, AdvCoefs3rd);
    Kokkos::fence();
    parallelFor(
        {NEdgesAll}, KOKKOS_LAMBDA(int IEdge) { masksAndCoefficients(IEdge); });
    Kokkos::fence();
+   if (FCT) {
+      HProvInv = Array2DReal("FCTProvesionalLayerThickness", Mesh->NEdgesAll,
+                             NVertLayers);
+      HNewInv =
+          Array2DReal("FCTProvesionalNewInverse", Mesh->NEdgesAll, NVertLayers);
+      HProv =
+          Array2DReal("FCTProvesionalThickness", Mesh->NCellsAll, NVertLayers);
+      TracerMax = Array2DReal("FCTTracerMax", Mesh->NCellsAll, NVertLayers);
+      TracerMin = Array2DReal("FCTTracerMin", Mesh->NCellsAll, NVertLayers);
+   }
 }
 } // end namespace OMEGA
 
