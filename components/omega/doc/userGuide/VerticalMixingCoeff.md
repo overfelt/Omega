@@ -36,13 +36,13 @@ A constant background mixing value that represents small-scale mixing processes 
 
 ### 2. Convective Mixing
 
-Enhanced convective adjustment mixing that occurs in statically unstable regions of the water column to parameterize convection and homogenize properties. In Omega this is mixing is defaulted to occur when the squared Brunt Vaisala Frequency is less than 0.0 (unstable), and is off when equal to (neutral) or greater than (stable) 0.0.
+Enhanced convective adjustment mixing that occurs in statically unstable regions of the water column to parameterize convection and homogenize properties. In Omega this mixing is defaulted to occur when the squared Brunt Vaisala Frequency is less than 0.0 (unstable), and is off when equal to (neutral) or greater than (stable) 0.0. The convective diffusivity is thus added to the background diffusivity ($\kappa_b$) to form the total diffusivity coefficient $\kappa$.
 
 $$
 \kappa =
 \begin{cases}
-+\kappa_b + \kappa_{conv} \quad \text{ if } N^2 < N^2_{crit}\\
-+\kappa_b \quad \text{ if } N^2 \geq N^2_{crit}
+\kappa_b + \kappa_{conv} \quad \text{ if } N^2 < N^2_{crit}\\
+\kappa_b \quad \text{ if } N^2 \geq N^2_{crit}
 \end{cases}
 $$
 
@@ -53,7 +53,7 @@ This is different than some current implementations (i.e. in MPAS-Ocean and the 
 Mixing induced by vertical pseudo-velocity shear, implemented using the LMD94 scheme, through the gradient Richardson number (ratio of buoyancy to shear).
 
 $$
-\nu_{shear} = = \kappa_{shear} = =
+\nu_{shear} = \kappa_{shear} =
 \begin{cases}
 \nu_o \quad \text{ if } Ri_g < 0\\
 \nu_o \left[1 - \left( \frac{Ri_g}{Ri_{crit}} \right)^2 \right]^p \text{ if } 0 \leq Ri_g < Ri_{crit}\\
@@ -61,10 +61,10 @@ $$
 \end{cases}
 $$
 
-where $\nu_o$, $Ri_{crit}$, and $p$ are constant parameters set in the `VertMix` section of the yaml file (`BaseShearValue`, `RiCrit`, and `Exponent` under the `Shear` header). $Ri$ is defined as:
+where $\nu_o$, $Ri_{crit}$, and $p$ are constant parameters set in the `VertMix` section of the yaml file (`BaseShearValue`, `RiCrit`, and `Exponent` under the `Shear` header). $Ri_g$ is defined as:
 
 $$
-Ri = \frac{N^2}{\left|\frac{\partial \mathbf{U}}{\partial z}\right|^2}\,,
+Ri_g = \frac{N^2}{\left|\frac{\partial \mathbf{U}}{\partial z}\right|^2}\,,
 $$
 
-where $N^2$ is calculated by the EOS based on the ocean state and $\mathbf{U}$ is the magnitude of the horizontal velocity. $Ri$ is calculated by the vertical mixing module and then smoothed with a 1-2-1 (vertical) filter before being used to calculate the shear-instability-driven mixing. $N^2$, $\partial \mathbf{U}}{\partial z}\right|^2$ and $Ri$ of `K` are all defined at the cell center, top interface of layer `K`. $N^2$, $\nu_{shear}$ and $\kappa_{shear}$ are set to zero at the surface.
+where $N^2$ is calculated by the EOS based on the ocean state and $\mathbf{U}$ is the magnitude of the horizontal velocity. $Ri_g$ is calculated by the vertical mixing module and then smoothed with a 1-2-1 (vertical) filter before being used to calculate the shear-instability-driven mixing. $N^2$, $\left| \frac{\partial \mathbf{U}}{\partial z}\right|^2$ and $Ri_g$ of `k` are all defined at the cell center, top interface of layer `k`. $N^2$, $\nu$ and $\kappa$ are set to zero at the surface.

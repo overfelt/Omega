@@ -7,7 +7,7 @@ vertical diffusivity and viscosity, the gradient Richardson number, a smoothed g
 Currently the values of `VertDiff` and `VertVisc` are calculated using the linear combination of three options: (1) a
 constant background mixing value, (2) a convective instability mixing value, and (3) a Richardson
 number dependent shear instability driven mixing value from the [Large et al (1994)](https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/94RG01872) or LMD94 interior shear instability driven mixing parameterization. These options are linearly additive. In the future, additional additive options will be implemented, such as the K Profile Parameterization [(KPP; Large et al., 1994)](https://agupubs.onlinelibrary.wiley.com/doi/abs/10.1029/94rg01872). For both the convective and shear instability driven mixing values `BruntVaisalaFreqSq` is needed, which
-is calculated by the `EOS` class. `GradRichNum` is smoothed using a 1-2-1 filter to produce `GradRichNumSmoothed` which is used by the LMD94 shear instability driven mixing formulation.
+is calculated by the `EOS` class. `GradRichNum` is smoothed using a 1-2-1 (vertical) filter to produce `GradRichNumSmoothed` which is used by the LMD94 shear instability driven mixing formulation.
 
 ## Initialization and Usage
 

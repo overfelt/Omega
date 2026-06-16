@@ -200,14 +200,32 @@ void VertMix::computeVertMix(const Array2DReal &NormalVelocity,
    OMEGA_SCOPE(MinLayerCell, VCoord->MinLayerCell);
    OMEGA_SCOPE(MaxLayerCell, VCoord->MaxLayerCell);
 
-   /// Initialize VertDiff and VertVisc to background values
-   deepCopy(LocVertDiff, BackDiff);
-   deepCopy(LocVertVisc, BackVisc);
-   deepCopy(LocGradRichNum, 100.0_Real);
-   deepCopy(LocGradRichNumSmoothed, 100.0_Real);
+   /// First, initialize VertDiff and VertVisc to background values
+   parallelForOuter(
+       "VertMix-BackAndRich", {Mesh->NCellsAll},
+       KOKKOS_LAMBDA(I4 ICell, const TeamMember &Team) {
+          const int KMin   = MinLayerCell(ICell);
+          const int KMax   = MaxLayerCell(ICell) + 1;
+          const int KRange = vertRangeChunked(KMin, KMax);
 
-   /// Dispatch to the correct VertMix calculation
+          parallelForInner(
+              Team, KRange, INNER_LAMBDA(int KChunk) {
+                 const int KStart = chunkStart(KChunk, KMin);
+                 const int KLen   = chunkLength(KChunk, KStart, KMax);
+                 for (int KVec = 0; KVec < KLen; ++KVec) {
+                    const int K           = KStart + KVec;
+                    LocVertDiff(ICell, K) = BackDiff;
+                    LocVertVisc(ICell, K) = BackVisc;
+                    LocGradRichNum(ICell, K) =
+                        LocComputeGradRichardsonNum.RiInitValue;
+                    LocGradRichNumSmoothed(ICell, K) =
+                        LocComputeGradRichardsonNum.RiInitValue;
+                 }
+              });
+       });
+   /// Second, compute shear mixing if enabled
    if (LocComputeVertMixShear.Enabled) {
+      /// Compute Richardson number
       parallelForOuter(
           "VertMix-ComputeRi", {Mesh->NCellsAll},
           KOKKOS_LAMBDA(I4 ICell, const TeamMember &Team) {
@@ -235,6 +253,8 @@ void VertMix::computeVertMix(const Array2DReal &NormalVelocity,
                         LocGradRichNum(ICell, KMax);
                  });
           });
+      /// Smooth Richardson number with 1-2-1 filter the number of times
+      /// specified by RiSmoothLoops
       deepCopy(LocGradRichNumSmoothed, LocGradRichNum);
       for (int SmoothLoop = 0;
            SmoothLoop < LocComputeVertMixShear.RiSmoothLoops; ++SmoothLoop) {
@@ -246,15 +266,12 @@ void VertMix::computeVertMix(const Array2DReal &NormalVelocity,
                 const int KRange = vertRangeChunked(KMin, KMax);
                 parallelForInner(
                     Team, KRange, INNER_LAMBDA(int KChunk) {
-                       if (SmoothLoop == 0)
-                          LocOneTwoOneFilter(LocGradRichNumSmoothed, ICell,
-                                             KChunk, LocGradRichNum);
-                       else
-                          LocOneTwoOneFilter(LocGradRichNumSmoothed, ICell,
-                                             KChunk, LocGradRichNumSmoothed);
+                       LocOneTwoOneFilter(LocGradRichNumSmoothed, ICell, KChunk,
+                                          LocGradRichNumSmoothed);
                     });
              });
       }
+      /// Compute shear mixing using smoothed Richardson number
       parallelForOuter(
           "VertMix-Shear", {Mesh->NCellsAll},
           KOKKOS_LAMBDA(I4 ICell, const TeamMember &Team) {
@@ -267,23 +284,9 @@ void VertMix::computeVertMix(const Array2DReal &NormalVelocity,
                     LocComputeVertMixShear(LocVertDiff, LocVertVisc, ICell,
                                            KChunk, LocGradRichNumSmoothed);
                  });
-
-             teamBarrier(Team);
-
-             // Fill vertical diffusivity and viscosity at vertical
-             // boundaries using the closest valid value. This is equivalent
-             // to doing one-sided differencing at the boundary.
-             Kokkos::single(
-                 PerTeam(Team), INNER_LAMBDA() {
-                    LocVertDiff(ICell, MinLayerCell(ICell)) = 0.0_Real;
-                    LocVertVisc(ICell, MinLayerCell(ICell)) = 0.0_Real;
-                    LocVertDiff(ICell, MaxLayerCell(ICell) + 1) =
-                        LocVertDiff(ICell, KMax);
-                    LocVertVisc(ICell, MaxLayerCell(ICell) + 1) =
-                        LocVertVisc(ICell, KMax);
-                 });
           });
    }
+   /// Third, compute convective mixing if enabled
    if (LocComputeVertMixConv.Enabled) {
       parallelForOuter(
           "VertMix-Conv", {Mesh->NCellsAll},
@@ -297,27 +300,17 @@ void VertMix::computeVertMix(const Array2DReal &NormalVelocity,
                     LocComputeVertMixConv(LocVertDiff, LocVertVisc, ICell,
                                           KChunk, BruntVaisalaFreqSq);
                  });
-
-             teamBarrier(Team);
-
-             // Fill vertical diffusivity and viscosity at vertical
-             // boundaries using the closest valid value. This is equivalent
-             // to doing one-sided differencing at the boundary.
-             Kokkos::single(
-                 PerTeam(Team), INNER_LAMBDA() {
-                    LocVertDiff(ICell, MinLayerCell(ICell)) = 0.0_Real;
-                    LocVertVisc(ICell, MinLayerCell(ICell)) = 0.0_Real;
-                    LocVertDiff(ICell, MaxLayerCell(ICell) + 1) =
-                        LocVertDiff(ICell, KMax);
-                    LocVertVisc(ICell, MaxLayerCell(ICell) + 1) =
-                        LocVertVisc(ICell, KMax);
-                 });
           });
    }
+   /// Finally, zero viscosity/diffusivity at surface and bottom boundaries
    parallelFor(
-       "VertMix-Surface", {Mesh->NCellsAll}, KOKKOS_LAMBDA(I4 ICell) {
-          LocVertDiff(ICell, 0) = 0.0_Real;
-          LocVertVisc(ICell, 0) = 0.0_Real;
+       "VertMix-Boundaries", {Mesh->NCellsAll}, KOKKOS_LAMBDA(I4 ICell) {
+          const int KMin           = MinLayerCell(ICell);
+          const int KMax           = MaxLayerCell(ICell) + 1;
+          LocVertDiff(ICell, KMin) = 0.0_Real;
+          LocVertVisc(ICell, KMin) = 0.0_Real;
+          LocVertDiff(ICell, KMax) = 0.0_Real;
+          LocVertVisc(ICell, KMax) = 0.0_Real;
        });
 }
 

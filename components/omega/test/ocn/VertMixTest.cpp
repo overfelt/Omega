@@ -426,8 +426,8 @@ void testBackVertMix() {
               Team, KRange,
               INNER_LAMBDA(int KOff, int &InnerCount) {
                  const int K = KMin + KOff;
-                 if (K == 0) {
-                    // Surface layer should be zero
+                 if (K == KMin || K == KMax) {
+                    // Surface and bottom layers should be zero
                     if (BackVertVisc(ICell, K) != 0.0_Real)
                        InnerCount++;
                  } else {
@@ -464,8 +464,8 @@ void testBackVertMix() {
               Team, KRange,
               INNER_LAMBDA(int KOff, int &InnerCount) {
                  const int K = KMin + KOff;
-                 if (K == 0) {
-                    // Surface layer should be zero
+                 if (K == KMin || K == KMax) {
+                    // Surface and bottom layers should be zero
                     if (BackVertDiff(ICell, K) != 0.0_Real)
                        InnerCount++;
                  } else {
@@ -555,8 +555,8 @@ void testConvVertMix() {
               Team, KRange,
               INNER_LAMBDA(int KOff, int &InnerCount) {
                  const int K = KMin + KOff;
-                 if (K == 0) {
-                    // Surface layer should be zero
+                 if (K == KMin || K == KMax) {
+                    // Surface and bottom layers should be zero
                     if (VertViscOut(ICell, K) != 0.0_Real)
                        InnerCount++;
                  } else if (K < 30) {
@@ -594,8 +594,8 @@ void testConvVertMix() {
               Team, KRange,
               INNER_LAMBDA(int KOff, int &InnerCount) {
                  const int K = KMin + KOff;
-                 if (K == 0) {
-                    // Surface layer should be zero
+                 if (K == KMin || K == KMax) {
+                    // Surface and bottom layers should be zero
                     if (VertDiffOut(ICell, K) != 0.0_Real)
                        InnerCount++;
                  } else if (K < 30) {
@@ -689,7 +689,8 @@ void testShearVertMix() {
               Team, KRange,
               INNER_LAMBDA(int KOff, int &InnerCount) {
                  const int K = KMin + KOff;
-                 if (K == 0) {
+                 if (K == KMin || K == KMax) {
+                    // Surface and bottom layers should be zero
                     if (VertViscOut(ICell, K) != 0.0_Real)
                        InnerCount++;
                  } else if (K < 20) {
@@ -731,7 +732,8 @@ void testShearVertMix() {
               Team, KRange,
               INNER_LAMBDA(int KOff, int &InnerCount) {
                  const int K = KMin + KOff;
-                 if (K == 0) {
+                 if (K == KMin || K == KMax) {
+                    // Surface and bottom layers should be zero
                     if (VertDiffOut(ICell, K) != 0.0_Real)
                        InnerCount++;
                  } else if (K < 20) {
@@ -853,11 +855,12 @@ void testTotalVertMix() {
               Team, KRange,
               INNER_LAMBDA(int KOff, int &InnerCount) {
                  const int K = KMin + KOff;
-                 if (K == 0) {
+                 if (K == KMin || K == KMax) {
+                    // Surface and bottom layers should be zero
                     if (VertDiffP(ICell, K) != 0.0_Real)
                        InnerCount++;
                     // K = 1 should have ref value
-                 } else if (K == 1) {
+                 } else if (K == KMin + 1) {
                     if (!isApprox(VertDiffP(ICell, K), VertDiffExpValueP, RTol))
                        InnerCount++;
                     // otherwise check for invalid values
@@ -897,11 +900,11 @@ void testTotalVertMix() {
               Team, KRange,
               INNER_LAMBDA(int KOff, int &InnerCount) {
                  const int K = KMin + KOff;
-                 if (K == 0) {
+                 if (K == KMin || K == KMax) {
                     if (VertViscP(ICell, K) != 0.0_Real)
                        InnerCount++;
                     // K = 1 should have ref value
-                 } else if (K == 1) {
+                 } else if (K == KMin + 1) {
                     if (!isApprox(VertViscP(ICell, K), VertViscExpValueP, RTol))
                        InnerCount++;
                     // otherwise check for invalid values
@@ -952,11 +955,11 @@ void testTotalVertMix() {
               Team, KRange,
               INNER_LAMBDA(int KOff, int &InnerCount) {
                  const int K = KMin + KOff;
-                 if (K == 0) {
+                 if (K == KMin || K == KMax) {
                     if (VertDiffN(ICell, K) != 0.0_Real)
                        InnerCount++;
                     // K = 1 should have ref value
-                 } else if (K == 1) {
+                 } else if (K == KMin + 1) {
                     if (!isApprox(VertDiffN(ICell, K), VertDiffExpValueN, RTol))
                        InnerCount++;
                     // otherwise check for invalid values
@@ -996,11 +999,11 @@ void testTotalVertMix() {
               Team, KRange,
               INNER_LAMBDA(int KOff, int &InnerCount) {
                  const int K = KMin + KOff;
-                 if (K == 0) {
+                 if (K == KMin || K == KMax) {
                     if (VertViscN(ICell, K) != 0.0_Real)
                        InnerCount++;
                     // K = 1 should have ref value
-                 } else if (K == 1) {
+                 } else if (K == KMin + 1) {
                     if (!isApprox(VertViscN(ICell, K), VertViscExpValueN, RTol))
                        InnerCount++;
                     // otherwise check for invalid values

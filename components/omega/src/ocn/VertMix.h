@@ -62,10 +62,10 @@ class ShearMix {
 
    // Shear mixing parameters
    Real BaseShearValue = 0.005; ///< Base shear vertical viscosity and
-                                ///< diffusivity (m^2 s^-1) of LMG94
-   Real ShearRiCrit = 0.7;      ///< Critical Richardson number of LMG94
+                                ///< diffusivity (m^2 s^-1) of LMD94
+   Real ShearRiCrit = 0.7;      ///< Critical Richardson number of LMD94
    Real ShearExponent =
-       3.0; /// Exponent value used interior shear mixing calculation of LMG94
+       3.0; /// Exponent value used interior shear mixing calculation of LMD94
    I4 RiSmoothLoops = 2; ///< Number of smoothing loops for Richardson number
 
    /// Constructor for ShearMix
@@ -112,6 +112,8 @@ class ShearMix {
 /// Class for Gradient Richardson Number calculation
 class GradRichardsonNum {
  public:
+   Real RiInitValue = 100.0_Real; ///< Initial Richardson number value
+
    /// constructor declaration
    GradRichardsonNum(const HorzMesh *Mesh, const VertCoord *VCoord);
 
@@ -132,7 +134,7 @@ class GradRichardsonNum {
 
       for (int KVec = 0; KVec < KLen; ++KVec) {
          GradRichNumNorm[KVec] = 1.0e-12_Real;
-         GradRichNumTmp[KVec]  = 100.0_Real;
+         GradRichNumTmp[KVec]  = RiInitValue;
       }
 
       for (int J = 0; J < NEdgesOnCell(ICell); ++J) {
@@ -164,9 +166,9 @@ class GradRichardsonNum {
                                         BruntVaisalaFreqSq(JCell, K2))) /
                 (ShearSquared + 1.0e-12_Real);
 
-            Real Weight           = 0.25_Real * DcEdge(JEdge) * DvEdge(JEdge);
-            GradRichNumNorm[KVec] = GradRichNumNorm[KVec] + Weight;
-            GradRichNumTmp[KVec]  = GradRichNumTmp[KVec] + Weight * RiEdge;
+            Real Weight = 0.25_Real * DcEdge(JEdge) * DvEdge(JEdge);
+            GradRichNumNorm[KVec] += Weight;
+            GradRichNumTmp[KVec] += Weight * RiEdge;
          }
       }
 
