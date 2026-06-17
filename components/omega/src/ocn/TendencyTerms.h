@@ -367,9 +367,9 @@ class BottomDragOnEdge {
 // Tracer horizontal advection term
 class TracerHorzAdvOnCell {
  public:
-   bool Enabled       = false;
+   bool Enabled       = true;
    bool ForceLowOrder = false;
-   bool FCT           = false;
+   bool FCT           = true;
    // coefficient for blending high-order terms
    Real Coef3rdOrder = 0.25;
    TracerHorzAdvOnCell(const HorzMesh *Mesh, const VertCoord *VCoord);
@@ -433,14 +433,11 @@ class TracerHorzAdvOnCell {
    }
 
    KOKKOS_FUNCTION void FCTProvisionaLayerThicknesses(
-       Array2DReal HProvInv, Array2DReal HNewInv, Array2DReal HProv,
        const Array2DReal &FluxPseudoThickEdge, const Array2DReal &NormVelEdge,
-       const Real Dt, const I4 ICell, const I4 KChunk) const {
+       const Real Dt, const I4 ICell) const {
 
-      const I4 KStart        = KChunk * VecLength;
-      const I4 KEnd          = KStart + VecLength;
       const Real InvAreaCell = 1.0_Real / AreaCell(ICell);
-      for (I4 K = KStart; K < KEnd; ++K) {
+      for (I4 K =  MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
          HProv(ICell, K) = Dt * PseudoThick(ICell, K);
       }
       for (I4 I = 0; I < NEdgesOnCell(ICell); ++I) {
@@ -449,7 +446,7 @@ class TracerHorzAdvOnCell {
              InvAreaCell * DvEdge(IEdge) * EdgeSignOnCell(ICell, I);
          // Provisional layer thickness is after horizontal
          // thickness flux only
-         for (I4 K = KStart; K < KEnd; ++K) {
+         for (I4 K =  MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
             const Real NormalPseudoThicknessFlux =
                 FluxPseudoThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
             HProv(ICell, K) += SignedFactor * NormalPseudoThicknessFlux;
@@ -457,7 +454,7 @@ class TracerHorzAdvOnCell {
       }
       // New layer thickness is after horizontal and vertical
       // thickness flux
-      for (I4 K = KStart; K < KEnd; ++K) {
+      for (I4 K =  MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
          HProvInv(ICell, K) = 1.0_Real / HProv(ICell, K);
          HNewInv(ICell, K) =
              1.0_Real /
@@ -574,7 +571,6 @@ class TracerHorzAdvOnCell {
                                      Array2DReal &FlxIn, Array2DReal &FlxOut,
                                      const Real Dt,
                                      const Array3DReal &TracerCell) const {
-      const Real Eps         = 1.e-10_Real;
       const Real InvAreaCell = 1._Real / AreaCell(ICell);
       const I4 KStartCell    = chunkStart(KChunk, MinLayerCell(ICell));
       const I4 KLenCell = chunkLength(KChunk, KStartCell, MaxLayerCell(ICell));
@@ -606,8 +602,7 @@ class TracerHorzAdvOnCell {
             // Here workTend is the upwind tendency
             const Real TracerUpwindNew =
                 (TracerCell(L, ICell, K) * PseudoThick(ICell, K) +
-                 Dt * WorkTend(ICell, K)) *
-                HProvInv(ICell, K);
+                 Dt * WorkTend(ICell, K)) * HProvInv(ICell, K);
             const Real TracerMinNew =
                 TracerUpwindNew + Dt * FlxOut(ICell, K) * HProvInv(ICell, K);
             const Real TracerMaxNew =
@@ -624,8 +619,77 @@ class TracerHorzAdvOnCell {
          }
       }
    }
+   KOKKOS_FUNCTION void FCTRescaleHighOrderFlux(const I4 L, const I4 ICell,
+                                     const Real Dt,
+                                     const Array3DReal &Tend,
+                                     Array2DReal &WorkTend,
+				     Array2DReal &PseudoThickCell,
+                                     const Array3DReal &TracerCell) const {
+
+      // Accumulate the scaled high order vertical tendencies
+      // and the upwind tendencies
+      //do iCell = 1, nCellsOwned
+      const Real InvAreaCell1 = 1.0_Real / AreaCell(ICell);
+
+      // Accumulate the scaled high order horizontal tendencies
+      for (I4 I=0; I<NEdgesOnCell(ICell); ++I) {
+         const I4 IEdge = EdgesOnCell(ICell, I);
+         const Real SignedFactor = InvAreaCell1*EdgeSignOnCell(ICell,I);
+         for (I4 K = MinLayerEdgeBot(IEdge); K < MaxLayerEdgeTop(IEdge); ++K) {
+            // WorkTend on RHS is upwind tendency
+            // WorkTend on LHS is total horiz advect tendency
+            WorkTend(ICell,K) += SignedFactor*HighOrderFlx(L,IEdge,K);
+	 }
+      }
+      for (I4 K = MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
+         // workTend  on RHS is total horiz advection tendency
+         // TracerCell on LHS is provisional tracer after
+         //                     horizontal fluxes only.
+         TracerCell(L, ICell, K) = 
+	   (TracerCell(L,ICell,K) * PseudoThickCell(ICell,K) + Dt*WorkTend(ICell,K)) * HProvInv(ICell,K);
+         Tend(L,ICell,K) += WorkTend(ICell,K);
+      }
+   }
+
+   KOKKOS_FUNCTION void FCTComputeBudgetAdvectionEdgeFlux(const I4 L, const I4 IEdge) {
+      // iEdge = 1,nEdges
+      for (I4 K = MinLayerEdgeBot(IEdge); K < MaxLayerEdgeTop(IEdge); ++K) {
+         // Save u*h*T flux on edge for analysis. This variable will be
+         // divided by h at the end of the time step.
+         ActiveTracerHorizontalAdvectionEdgeFlux(L,IEdge,K) = 
+            (LowOrderFlx(L,IEdge,K) + HighOrderFlx(L,IEdge,K))/DvEdge(IEdge);
+      } 
+   }
+
+   KOKKOS_FUNCTION void FCTComputeBudgetAdvectionTendency(const I4 L, const I4 ICell,
+                                     Array2DReal &WorkTend) {
+      // iCell = 1, nCellsOwned
+      for (I4 K = MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
+         ActiveTracerHorizontalAdvectionTendency(L,ICell,K) = WorkTend(ICell,K);
+      } 
+   }
+   KOKKOS_FUNCTION void FCTMonotonicityCheck(const I4 L, const I4 ICell,
+                                     const Array3DReal &TracerCell) const {
+      // Check tracer values against local min,max to detect
+      // non-monotone values and write warning if found
+  
+      // Perform check on host since print involved
+      //do iCell = 1, nCellsOwned
+      for (I4 K = MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
+         if (TracerCell(L,ICell,K) < TracerMin(ICell, K)-Eps) {
+           printf("Horizontal minimum out of bounds on tracer: %i %lg %lg\n", 
+              L, TracerMin(ICell, K), TracerCell(L,ICell,K));
+	 }
+         if (TracerCell(L,ICell,K) > TracerMax(ICell,K)+Eps) {
+           printf("Horizontal maximum out of bounds on tracer: %i %lg %lg\n", 
+              L, TracerMax(ICell, K), TracerCell(L,ICell,K));
+	 }
+      }
+   }
+
 
  private:
+   const Real Eps         = 1.e-10_Real;
    const HorzMesh *HorzontalMesh;
    const VertCoord *VerticalCoord;
    const I4 NVertLayers;
@@ -657,6 +721,8 @@ class TracerHorzAdvOnCell {
    Array3DReal LowOrderFlx;
    Array1DI4 MinLayerCell;
    Array1DI4 MaxLayerCell;
+   Array3DReal ActiveTracerHorizontalAdvectionEdgeFlux;
+   Array3DReal ActiveTracerHorizontalAdvectionTendency;
 };
 
 // Tracer horizontal diffusion term

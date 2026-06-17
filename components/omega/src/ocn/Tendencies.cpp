@@ -727,8 +727,18 @@ void Tendencies::computeTracerTendenciesOnly(
    Array2DReal NormalVelEdge = State->getNormalVelocity(VelTimeLevel);
    const Array2DReal &FluxPseudoThickEdge =
        AuxState->PseudoThicknessAux.FluxPseudoThickEdge;
+   const Array2DReal NormVelEdge  = State->getNormalVelocity(VelTimeLevel);
+   R8 Dt = 0;
+   TimeStep.get(Dt, TimeUnits::Seconds);
    if (LocTracerHorzAdv.Enabled) {
       Pacer::start("Tend:tracerHorzAdv", 2);
+      if (LocTracerHorzAdv.FCT) {
+         parallelFor(
+             {Mesh->NCellsAll}, KOKKOS_LAMBDA(int ICell) {
+                LocTracerHorzAdv.FCTProvisionaLayerThicknesses(
+		    FluxPseudoThickEdge, NormVelEdge, Dt, ICell);
+             });
+      } else {
       parallelForOuter(
           {NTracers, Mesh->NEdgesAll},
           KOKKOS_LAMBDA(int L, int IEdge, const TeamMember &Team) {
@@ -752,6 +762,7 @@ void Tendencies::computeTracerTendenciesOnly(
                     LocTracerHorzAdv(LocTracerTend, L, ICell, KChunk);
                  });
           });
+      }
       Pacer::stop("Tend:tracerHorzAdv", 2);
    }
 
