@@ -245,7 +245,7 @@ int main(int argc, char *argv[]) {
       DefVertCoord->computeGeomZHeight(PseudoThickness, SpecVol);
       auto GeomZInterfH = createHostMirrorCopy(DefVertCoord->GeomZInterface);
       auto GeomZMidH    = createHostMirrorCopy(DefVertCoord->GeomZMid);
-      auto SshCellH = createHostMirrorCopy(DefVertCoord->SshCell);
+      auto SshCellH     = createHostMirrorCopy(DefVertCoord->SshCell);
 
       /// Check results
       Err = 0;
