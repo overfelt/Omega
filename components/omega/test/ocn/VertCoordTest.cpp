@@ -245,6 +245,7 @@ int main(int argc, char *argv[]) {
       DefVertCoord->computeGeomZHeight(PseudoThickness, SpecVol);
       auto GeomZInterfH = createHostMirrorCopy(DefVertCoord->GeomZInterface);
       auto GeomZMidH    = createHostMirrorCopy(DefVertCoord->GeomZMid);
+      auto SshCellH     = createHostMirrorCopy(DefVertCoord->SshCell);
 
       /// Check results
       Err = 0;
@@ -263,6 +264,12 @@ int main(int argc, char *argv[]) {
             if (Diff > 1e-10) {
                Err += 1;
             }
+         }
+         /// SshCell should equal ZInterface at the top of the active column
+         Real Expected = -DefVertCoord->MinLayerCellH(ICell);
+         Real Diff     = std::abs(SshCellH(ICell) - Expected);
+         if (Diff > 1e-10) {
+            Err += 1;
          }
       }
 
@@ -291,6 +298,7 @@ int main(int argc, char *argv[]) {
       /// Call functions and get host copy of output
       DefVertCoord->computeGeomZHeight(PseudoThickness, SpecVol);
       auto ZInterfH2 = createHostMirrorCopy(DefVertCoord->GeomZInterface);
+      auto SshCellH2 = createHostMirrorCopy(DefVertCoord->SshCell);
 
       /// Check results
       Err = 0;
@@ -303,6 +311,14 @@ int main(int argc, char *argv[]) {
             if (Diff > 1e-10) {
                Err += 1;
             }
+         }
+         /// SshCell should equal ZInterface at the top of the active column,
+         /// which is -((MinLayer+1)*MinLayer)/2
+         I4 MinK       = DefVertCoord->MinLayerCellH(ICell);
+         Real Expected = -((MinK + 1.0_Real) * MinK) / 2.0_Real;
+         Real Diff     = std::abs(SshCellH2(ICell) - Expected);
+         if (Diff > 1e-10) {
+            Err += 1;
          }
       }
 
