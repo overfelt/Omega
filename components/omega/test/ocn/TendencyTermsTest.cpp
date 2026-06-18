@@ -35,7 +35,6 @@
 #include "VertCoord.h"
 #include "mpi.h"
 
-#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <vector>
@@ -1149,45 +1148,8 @@ void initTendTest(const std::string &MeshFile, int NVertLayers) {
    Config::Initialize();
    Config::readAll("omega.yml");
 
-   // Check if debug tracers are configured in the Tracers section.
-   // If missing or incomplete, add/reset them directly in the config.
-   Config *OmegaConfig = Config::getOmegaConfig();
-   Config TracersConfig("Tracers");
-   Err = OmegaConfig->get(TracersConfig);
-   if (Err.isSuccess()) {
-      std::vector<std::string> DebugTracers = {"Debug1", "Debug2", "Debug3"};
-
-      bool HasAllDebugTracers = false;
-      if (TracersConfig.existsVar("Debug")) {
-         std::vector<std::string> ConfiguredDebugTracers;
-         Error DebugErr = TracersConfig.get("Debug", ConfiguredDebugTracers);
-         if (DebugErr.isSuccess()) {
-            HasAllDebugTracers =
-                std::find(ConfiguredDebugTracers.begin(),
-                          ConfiguredDebugTracers.end(),
-                          "Debug1") != ConfiguredDebugTracers.end() &&
-                std::find(ConfiguredDebugTracers.begin(),
-                          ConfiguredDebugTracers.end(),
-                          "Debug2") != ConfiguredDebugTracers.end() &&
-                std::find(ConfiguredDebugTracers.begin(),
-                          ConfiguredDebugTracers.end(),
-                          "Debug3") != ConfiguredDebugTracers.end();
-         }
-      }
-
-      if (!HasAllDebugTracers) {
-         if (TracersConfig.existsVar("Debug")) {
-            TracersConfig.set("Debug", DebugTracers);
-         } else {
-            TracersConfig.add("Debug", DebugTracers);
-         }
-         LOG_INFO("TendencyTermsTest: Configured debug tracers (Debug1, "
-                  "Debug2, Debug3)");
-      } else {
-         LOG_INFO("TendencyTermsTest: Debug tracers Debug1/Debug2/Debug3 are "
-                  "already configured");
-      }
-   }
+   // Ensure required debug tracers are configured in the Omega configuration
+   ensureDebugTracersConfigured("TendencyTermsTest");
 
    // Initialize time stepping and get model clock
    TimeStepper::init1();

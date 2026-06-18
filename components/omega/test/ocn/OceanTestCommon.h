@@ -1,6 +1,7 @@
 #ifndef OMEGA_OCEAN_TEST_COMMON_H
 #define OMEGA_OCEAN_TEST_COMMON_H
 
+#include "Config.h"
 #include "DataTypes.h"
 #include "Halo.h"
 #include "HorzMesh.h"
@@ -8,7 +9,61 @@
 #include "MachEnv.h"
 #include "OmegaKokkos.h"
 
+#include <string>
+#include <vector>
+
 namespace OMEGA {
+
+// Ensure required debug tracers are available in Tracers.Debug config.
+inline void ensureDebugTracersConfigured(const std::string &TestName) {
+
+   Config *OmegaConfig = Config::getOmegaConfig();
+   if (OmegaConfig == nullptr) {
+      LOG_ERROR("{}: Omega configuration is not initialized", TestName);
+      return;
+   }
+
+   Config TracersConfig("Tracers");
+   Error Err = OmegaConfig->get(TracersConfig);
+   if (!Err.isSuccess()) {
+      LOG_ERROR("{}: Tracers section not found in configuration", TestName);
+      return;
+   }
+
+   std::vector<std::string> DebugTracers = {"Debug1", "Debug2", "Debug3"};
+   bool HasAllDebugTracers               = false;
+
+   if (TracersConfig.existsVar("Debug")) {
+      std::vector<std::string> ConfiguredDebugTracers;
+      Error DebugErr = TracersConfig.get("Debug", ConfiguredDebugTracers);
+      if (DebugErr.isSuccess()) {
+         auto hasTracer =
+             [&ConfiguredDebugTracers](const std::string &TracerName) {
+                for (const auto &Name : ConfiguredDebugTracers) {
+                   if (Name == TracerName)
+                      return true;
+                }
+                return false;
+             };
+
+         HasAllDebugTracers =
+             hasTracer("Debug1") && hasTracer("Debug2") && hasTracer("Debug3");
+      }
+   }
+
+   if (!HasAllDebugTracers) {
+      if (TracersConfig.existsVar("Debug")) {
+         TracersConfig.set("Debug", DebugTracers);
+      } else {
+         TracersConfig.add("Debug", DebugTracers);
+      }
+      LOG_INFO("{}: Configured debug tracers (Debug1, Debug2, Debug3)",
+               TestName);
+   } else {
+      LOG_INFO("{}: Debug tracers Debug1/Debug2/Debug3 are already configured",
+               TestName);
+   }
+}
 
 // check if two real numbers are equal with a given relative tolerance
 KOKKOS_INLINE_FUNCTION
