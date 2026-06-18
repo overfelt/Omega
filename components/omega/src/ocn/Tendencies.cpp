@@ -7,6 +7,7 @@
 // tendency terms are enabled.
 //
 //===----------------------------------------------------------------------===//
+#include <iostream>
 
 #include "Tendencies.h"
 #include "CustomTendencyTerms.h"
@@ -227,6 +228,8 @@ void Tendencies::readConfig(Config *OmegaConfig ///< [in] Omega config
       CHECK_ERROR_ABORT(
           Err,
           "Tendencies: HorzTracerFluxLimiterEnable not found in AdvectConfig");
+      std::cout<<__FILE__<<":"<<__LINE__<<" Set TracerHorzAdv.FCT to true"<<std::endl;
+      TracerHorzAdv.FCT = true;
    }
    Err += TendConfig.get("TracerDiffTendencyEnable",
                          this->TracerDiffusion.Enabled);
@@ -733,6 +736,7 @@ void Tendencies::computeTracerTendenciesOnly(
    if (LocTracerHorzAdv.Enabled) {
       Pacer::start("Tend:tracerHorzAdv", 2);
       if (LocTracerHorzAdv.FCT) {
+	      std::cout<<__FILE__<<":"<<__LINE__<<" Calling LocTracerHorzAdv.FCTProvisionaLayerThicknesses."<<std::endl;
          parallelFor(
              {Mesh->NCellsAll}, KOKKOS_LAMBDA(int ICell) {
                 LocTracerHorzAdv.FCTProvisionaLayerThicknesses(
