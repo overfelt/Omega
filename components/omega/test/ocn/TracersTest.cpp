@@ -26,6 +26,7 @@
 #include "VertCoord.h"
 #include "mpi.h"
 
+#include <algorithm>
 #include <iostream>
 
 using namespace OMEGA;
@@ -53,6 +54,46 @@ I4 initTracersTest() {
    // Open config file
    Config("Omega");
    Config::readAll("omega.yml");
+
+   // Check if debug tracers are configured in the Tracers section.
+   // If missing or incomplete, add/reset them directly in the config.
+   Config *OmegaConfig = Config::getOmegaConfig();
+   Config TracersConfig("Tracers");
+   Error ConfigErr = OmegaConfig->get(TracersConfig);
+   if (ConfigErr.isSuccess()) {
+      std::vector<std::string> DebugTracers = {"Debug1", "Debug2", "Debug3"};
+
+      bool HasAllDebugTracers = false;
+      if (TracersConfig.existsVar("Debug")) {
+         std::vector<std::string> ConfiguredDebugTracers;
+         Error DebugErr = TracersConfig.get("Debug", ConfiguredDebugTracers);
+         if (DebugErr.isSuccess()) {
+            HasAllDebugTracers =
+                std::find(ConfiguredDebugTracers.begin(),
+                          ConfiguredDebugTracers.end(),
+                          "Debug1") != ConfiguredDebugTracers.end() &&
+                std::find(ConfiguredDebugTracers.begin(),
+                          ConfiguredDebugTracers.end(),
+                          "Debug2") != ConfiguredDebugTracers.end() &&
+                std::find(ConfiguredDebugTracers.begin(),
+                          ConfiguredDebugTracers.end(),
+                          "Debug3") != ConfiguredDebugTracers.end();
+         }
+      }
+
+      if (!HasAllDebugTracers) {
+         if (TracersConfig.existsVar("Debug")) {
+            TracersConfig.set("Debug", DebugTracers);
+         } else {
+            TracersConfig.add("Debug", DebugTracers);
+         }
+         LOG_INFO("TracersTest: Configured debug tracers (Debug1, Debug2, "
+                  "Debug3)");
+      } else {
+         LOG_INFO("TracersTest: Debug tracers Debug1/Debug2/Debug3 are already "
+                  "configured");
+      }
+   }
 
    // Initialize the default time stepper and model clock
    TimeStepper::init1();
