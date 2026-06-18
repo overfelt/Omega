@@ -398,7 +398,7 @@ Tendencies::Tendencies(const std::string &Name_, ///< [in] Name for tendencies
       VelocityDiffusion(Mesh, VCoord), VelocityHyperDiff(Mesh, VCoord),
       SfcStressForcing(Mesh, VCoord), BottomDrag(Mesh, VCoord),
       TracerDiffusion(Mesh, VCoord), TracerHyperDiff(Mesh, VCoord),
-      TracerHorzAdv(Mesh, VCoord), SurfaceTracerRestoring(Mesh),
+      TracerHorzAdv(Mesh, VCoord, VAdv), SurfaceTracerRestoring(Mesh),
       CustomThicknessTend(InCustomThicknessTend),
       CustomVelocityTend(InCustomVelocityTend), EqState(EqState), PGrad(PGrad) {
 
@@ -730,7 +730,8 @@ void Tendencies::computeTracerTendenciesOnly(
    Array2DReal NormalVelEdge = State->getNormalVelocity(VelTimeLevel);
    const Array2DReal &FluxPseudoThickEdge =
        AuxState->PseudoThicknessAux.FluxPseudoThickEdge;
-   const Array2DReal NormVelEdge  = State->getNormalVelocity(VelTimeLevel);
+   const Array2DReal &PseudoThickCell = State->getPseudoThickness(ThickTimeLevel);
+   const Array2DReal NormVelEdge      = State->getNormalVelocity(VelTimeLevel);
    R8 Dt = 0;
    TimeStep.get(Dt, TimeUnits::Seconds);
    if (LocTracerHorzAdv.Enabled) {
@@ -740,7 +741,7 @@ void Tendencies::computeTracerTendenciesOnly(
          parallelFor(
              {Mesh->NCellsAll}, KOKKOS_LAMBDA(int ICell) {
                 LocTracerHorzAdv.FCTProvisionaLayerThicknesses(
-		    FluxPseudoThickEdge, NormVelEdge, Dt, ICell);
+		    FluxPseudoThickEdge, PseudoThickCell, NormVelEdge, Dt, ICell);
              });
       } else {
       parallelForOuter(
