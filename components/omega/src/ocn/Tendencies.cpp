@@ -748,11 +748,31 @@ void Tendencies::computeTracerTendenciesOnly(
              const int KRange = vertRangeChunked(KMin, KMax);
 //           parallelForInner(
 //               Team, KRange, INNER_LAMBDA(int KChunk) {
-	   for (int KChunk=KMin; KChunk <= KMax; ++KChunk) {
-                LocTracerHorzAdv.FCTProvisionaLayerThicknesses(ICell, KChunk, Dt,
-		    LocFluxPseudoThickEdge, LocPseudoThickCell, LocNormalVelEdge);
+	      for (int KChunk=KMin; KChunk <= KMax; ++KChunk) {
+                   LocTracerHorzAdv.FCTProvisionaLayerThicknesses(ICell, KChunk, Dt,
+	   	    LocFluxPseudoThickEdge, LocPseudoThickCell, LocNormalVelEdge);
 	   }
 	}
+//           });
+//        });
+//      parallelForOuter( {NTracers, Mesh->NCellsAll},
+//         KOKKOS_LAMBDA(int ICell, const TeamMember &Team) {
+	   for (int L=0; L< NTracers; ++L) {
+	   for (int ICell=0; ICell< Mesh->NCellsAll; ++ICell) {
+             const int KMin   = LocMinLayerCell(ICell);
+             const int KMax   = LocMaxLayerCell(ICell);
+             const int KRange = vertRangeChunked(KMin, KMax);
+//           parallelForInner(
+//               Team, KRange, INNER_LAMBDA(int KChunk) {
+	      for (int KChunk=KMin; KChunk <= KMax; ++KChunk) {
+                  LocTracerHorzAdv.FCTTracerMinMax(L,   ICell,
+                     KChunk,
+                     LocMinLayerCell,
+                     LocMaxLayerCell,
+                     TracerArray);
+	      }
+	   }
+	   }
 //           });
 //        });
       } else {
