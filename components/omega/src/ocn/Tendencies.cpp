@@ -779,14 +779,34 @@ void Tendencies::computeTracerTendenciesOnly(
 //           parallelForInner(
 //               Team, KRange, INNER_LAMBDA(int KChunk) {
 	      for (int KChunk=KMin; KChunk <= KMax; ++KChunk) {
-                  LocTracerHorzAdv.FCTTracerMinMax(L,   ICell,
-                     KChunk,
-                     LocMinLayerCell,
-                     LocMaxLayerCell);
+                  LocTracerHorzAdv.FCTTracerMinMax(ICell, KChunk,
+                     LocMinLayerCell, LocMaxLayerCell);
 	     }
 	  }
 //           });
 //        });
+  
+  
+//      parallelForOuter( {Mesh->NEdgesAll},
+//         KOKKOS_LAMBDA(int IEdge, const TeamMember &Team) {
+           for (int IEdge=0; IEdge< Mesh->NEdgesAll; ++IEdge) {
+             const int KMin   = LocMinLayerEdgeBot(IEdge);
+             const int KMax   = LocMaxLayerEdgeTop(IEdge);
+             const int KRange = vertRangeChunked(KMin, KMax);
+//           parallelForInner(
+//               Team, KRange, INNER_LAMBDA(int KChunk) {
+              for (int KChunk=KMin; KChunk <= KMax; ++KChunk) {
+                  LocTracerHorzAdv.FCTHighAndLowOrderFlux(L, IEdge, KChunk,
+                         LocMinLayerCell, LocMaxLayerCell,
+                         LocFluxPseudoThickEdge, LocNormalVelEdge);
+             }
+          }
+//           });
+//        });
+
+  
+  
+  
 	   }
       } else {
       parallelForOuter(
