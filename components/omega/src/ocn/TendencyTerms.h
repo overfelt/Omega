@@ -459,8 +459,8 @@ class TracerHorzAdvOnCell {
             const Real NormalThicknessFlux =
                 FluxPseudoThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
             HProv(ICell, K) += SignedFactor * NormalThicknessFlux;
-std::cout<<"HProv "<<ICell<<" "<<I<<" "<<K<<" "<<std::setprecision(14)<<HProv(ICell, K)
-	<<" "<<NormalThicknessFlux<<" "<<FluxPseudoThickEdge(IEdge, K)<<" "<<NormVelEdge(IEdge, K)<<std::endl;
+//std::cout<<"HProv "<<ICell<<" "<<I<<" "<<K<<" "<<std::setprecision(14)<<HProv(ICell, K)
+//<<" "<<NormalThicknessFlux<<" "<<FluxPseudoThickEdge(IEdge, K)<<" "<<NormVelEdge(IEdge, K)<<std::endl;
          }
       }
       // New layer thickness is after horizontal and vertical
@@ -475,21 +475,26 @@ std::cout<<"HProv "<<ICell<<" "<<I<<" "<<K<<" "<<std::setprecision(14)<<HProv(IC
       }
    }
 
+   KOKKOS_FUNCTION void FCTTracerCurFill(const I4 L, const I4 ICell, const I4 KChunk,
+         const Array3DReal &TracerArray) const {
+      const I4 KStart = KChunk * VecLength;
+      const I4 KEnd   = KStart + VecLength;
+      for (I4 K = KStart; K < KEnd; ++K) 
+         TracerCur(ICell, K) = TracerArray(L, ICell, K);
+   }
    KOKKOS_FUNCTION void FCTTracerMinMax(const I4 L, const I4 ICell,
                                         const I4 KChunk,
                                         const Array1DI4 MinLayerCell,
-                                        const Array1DI4 MaxLayerCell,
-                                        const Array3DReal &TracerCell) const {
+                                        const Array1DI4 MaxLayerCell) const {
 
       const I4 KStart = KChunk * VecLength;
       const I4 KEnd   = KStart + VecLength;
       for (I4 K = KStart; K < KEnd; ++K) {
-         TracerMin(ICell, K) = TracerCell(L, ICell, K);
-         TracerMax(ICell, K) = TracerCell(L, ICell, K);
+         TracerMin(ICell, K) = TracerCur(ICell, K);
+         TracerMax(ICell, K) = TracerCur(ICell, K);
       }
       for (I4 I = 0; I < NEdgesOnCell(ICell); ++I) {
-         const I4 IEdge  = EdgesOnCell(ICell, I);
-         const I4 ICell2 = CellsOnCell(IEdge, I);
+         const I4 ICell2 = CellsOnCell(ICell, I);
          const I4 KMin   = MinLayerCell(ICell2);
          const I4 KMax   = MaxLayerCell(ICell2);
          const I4 KRange = vertRangeChunked(KMin, KMax);
@@ -498,12 +503,14 @@ std::cout<<"HProv "<<ICell<<" "<<I<<" "<<K<<" "<<std::setprecision(14)<<HProv(IC
             const I4 KEnd1   = Kokkos::min(KEnd, KStart1 + VecLength);
             for (I4 K = KStart1; K < KEnd1; ++K) {
                TracerMax(ICell, K) =
-                   Kokkos::max(TracerMax(ICell, K), TracerCell(L, ICell2, K));
+                   Kokkos::max(TracerMax(ICell, K), TracerCur(ICell2, K));
                TracerMin(ICell, K) =
-                   Kokkos::min(TracerMin(ICell, K), TracerCell(L, ICell2, K));
+                   Kokkos::min(TracerMin(ICell, K), TracerCur(ICell2, K));
             }
          }
       }
+//for (I4 K = KStart; K < KEnd; ++K)
+//std::cout<<"TracerM "<<L<<" "<<ICell<<" "<<K<<" "<<std::setprecision(14)<<TracerMin(ICell, K)<<" "<<TracerMax(ICell, K)<<std::endl;
    }
 
    KOKKOS_FUNCTION void FCTHighAndLowOrderFlux(
@@ -715,6 +722,7 @@ std::cout<<"HProv "<<ICell<<" "<<I<<" "<<K<<" "<<std::setprecision(14)<<HProv(IC
    Array2DReal AdvCoefs;
    Array2DReal AdvCoefs3rd;
    Array3DReal HighOrderFlxHorz;
+   Array2DReal TracerCur;
 
    Array1DI4 NEdgesOnCell;
    Array2DI4 EdgesOnCell;

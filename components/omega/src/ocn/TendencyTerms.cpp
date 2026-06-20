@@ -88,6 +88,7 @@ TracerHorzAdvOnCell::TracerHorzAdvOnCell(const HorzMesh *Mesh,
                   Mesh->NEdgesAll),
       HighOrderFlxHorz("HigherOrderHorizontalFlux", Tracers::getNumTracers(),
                        Mesh->NEdgesAll, VCoord->NVertLayers),
+      TracerCur(),
       NEdgesOnCell(Mesh->NEdgesOnCell), EdgesOnCell(Mesh->EdgesOnCell),
       CellsOnEdge(Mesh->CellsOnEdge), 
       MinLayerEdgeBot(VCoord->MinLayerEdgeBot),
@@ -165,19 +166,20 @@ void TracerHorzAdvOnCell::init() {
       HProvInv = Array2DReal("FCTProvesionalLayerThickness", Mesh->NEdgesAll,
                              NVertLayers);
       HNewInv =
-          Array2DReal("FCTProvesionalNewInverse", Mesh->NEdgesAll, NVertLayers);
+          Array2DReal("FCTProvesionalNewInverse", NEdgesAll, NVertLayers);
       HProv =
-          Array2DReal("FCTProvesionalThickness", Mesh->NCellsAll, NVertLayers);
-      TracerMax = Array2DReal("FCTTracerMax", Mesh->NCellsAll, NVertLayers);
-      TracerMin = Array2DReal("FCTTracerMin", Mesh->NCellsAll, NVertLayers);
-      HighOrderFlx = Array2DReal("FCTHighOrderFlx", Mesh->NEdgesAll, NVertLayers);
-      LowOrderFlx = Array2DReal("FCTLowhOrderFlx", Mesh->NEdgesAll, NVertLayers);
+          Array2DReal("FCTProvesionalThickness", NCellsAll, NVertLayers);
+      TracerCur = Array2DReal("TracerCur", NCellsAll+1, NVertLayers),
+      TracerMax = Array2DReal("FCTTracerMax", NCellsAll, NVertLayers);
+      TracerMin = Array2DReal("FCTTracerMin", NCellsAll, NVertLayers);
+      HighOrderFlx = Array2DReal("FCTHighOrderFlx", NEdgesAll, NVertLayers);
+      LowOrderFlx = Array2DReal("FCTLowhOrderFlx", NEdgesAll, NVertLayers);
       if (ComputeBudgets) {
 	 const int NTracers          = Tracers::getNumTracers();
          ActiveTracerHorizontalAdvectionEdgeFlux = 
-	   Array3DReal("FCTActiveTracerHorizontalAdvectionEdgeFlux", NTracers, Mesh->NCellsAll, NVertLayers);
+	   Array3DReal("FCTActiveTracerHorizontalAdvectionEdgeFlux", NTracers, NCellsAll, NVertLayers);
          ActiveTracerHorizontalAdvectionTendency = 
-	   Array3DReal("FCTActiveTracerHorizontalAdvectionTendency", NTracers, Mesh->NCellsAll, NVertLayers);
+	   Array3DReal("FCTActiveTracerHorizontalAdvectionTendency", NTracers, NCellsAll, NVertLayers);
       }
    }
 }
