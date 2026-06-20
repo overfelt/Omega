@@ -19,6 +19,7 @@
 #include "VertCoord.h"
 
 #include <cmath> // for std::copysign
+#include <iomanip>
 
 namespace OMEGA {
 
@@ -435,14 +436,18 @@ class TracerHorzAdvOnCell {
    }
 
    KOKKOS_FUNCTION void FCTProvisionaLayerThicknesses(
+       const I4 ICell, const I4 KChunk, const Real Dt,
        const Array2DReal &FluxPseudoThickEdge, 
        const Array2DReal &PseudoThickCell,
-       const Array2DReal &NormVelEdge,
-       const Real Dt, const I4 ICell) const {
+       const Array2DReal &NormVelEdge) const {
 
-      const Real InvAreaCell = 1.0_Real / AreaCell(ICell);
-      for (I4 K =  MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
-         HProv(ICell, K) = Dt * PseudoThickCell(ICell, K);
+
+      const I4 KStart = KChunk * VecLength;
+      const I4 KEnd   = KStart + VecLength;
+
+      const Real InvAreaCell = Dt / AreaCell(ICell);
+      for (I4 K = KStart; K < KEnd; ++K) {
+         HProv(ICell, K) = PseudoThickCell(ICell, K);
       }
       for (I4 I = 0; I < NEdgesOnCell(ICell); ++I) {
          const I4 IEdge = EdgesOnCell(ICell, I);
@@ -450,19 +455,22 @@ class TracerHorzAdvOnCell {
              InvAreaCell * DvEdge(IEdge) * EdgeSignOnCell(ICell, I);
          // Provisional layer thickness is after horizontal
          // thickness flux only
-         for (I4 K =  MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
-            const Real NormalPseudoThicknessFlux =
+         for (I4 K = KStart; K < KEnd; ++K) {
+            const Real NormalThicknessFlux =
                 FluxPseudoThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
-            HProv(ICell, K) += SignedFactor * NormalPseudoThicknessFlux;
+            HProv(ICell, K) += SignedFactor * NormalThicknessFlux;
+std::cout<<"HProv "<<ICell<<" "<<I<<" "<<K<<" "<<std::setprecision(14)<<HProv(ICell, K)
+	<<" "<<NormalThicknessFlux<<" "<<FluxPseudoThickEdge(IEdge, K)<<" "<<NormVelEdge(IEdge, K)<<std::endl;
          }
       }
       // New layer thickness is after horizontal and vertical
       // thickness flux
-      for (I4 K =  MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
+      for (I4 K = KStart; K < KEnd; ++K) {
          HProvInv(ICell, K) = 1.0_Real / HProv(ICell, K);
          HNewInv(ICell, K) =
              1.0_Real /
-             (HProv(ICell, K) - Dt * VerticalPseudoVelocity(ICell, K) +
+             (HProv(ICell, K) - 
+	      Dt * VerticalPseudoVelocity(ICell, K) +
               Dt * VerticalPseudoVelocity(ICell, K + 1));
       }
    }
@@ -524,13 +532,13 @@ class TracerHorzAdvOnCell {
          const I4 KLenCell   = MaxLayerCell(ICell);
          const I4 KEndCell   = KStartCell + KLenCell;
          for (I4 K = KStartCell; K < KEndCell; ++K) {
-            const Real NormalPseudoThicknessFlux =
+            const Real NormalThicknessFlux =
                 FluxPseudoThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
             HighOrderFlx(IEdge, K) +=
-                TracerCell(L, ICell, K) * NormalPseudoThicknessFlux *
+                TracerCell(L, ICell, K) * NormalThicknessFlux *
                 AdvMaskHighOrder(IEdge, K) *
                 (Coef1 +
-                 Coef3 * std::copysign(1.0_Real, NormalPseudoThicknessFlux));
+                 Coef3 * std::copysign(1.0_Real, NormalThicknessFlux));
          }
       }
       // Compute 2nd order fluxes where needed.
@@ -538,16 +546,16 @@ class TracerHorzAdvOnCell {
       // Remove low order flux from the high order flux
       // Store left over high order flux in highOrderFlx array
       for (I4 K = MinLayerEdgeBot(IEdge); K < MaxLayerEdgeTop(IEdge); ++K) {
-         const Real NormalPseudoThicknessFlux =
+         const Real NormalThicknessFlux =
              FluxPseudoThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
          const Real TracerWeight = (1.0_Real - AdvMaskHighOrder(IEdge, K)) *
                                    (DvEdge(IEdge) * 0.5_Real) *
-                                   NormalPseudoThicknessFlux;
+                                   NormalThicknessFlux;
 
          LowOrderFlx(IEdge, K) =
-             DvEdge(IEdge) * (Kokkos::max(0.0_Real, NormalPseudoThicknessFlux) *
+             DvEdge(IEdge) * (Kokkos::max(0.0_Real, NormalThicknessFlux) *
                                   TracerCell(L, ICell1, K) +
-                              Kokkos::min(0.0_Real, NormalPseudoThicknessFlux) *
+                              Kokkos::min(0.0_Real, NormalThicknessFlux) *
                                   TracerCell(L, ICell2, K));
 
          HighOrderFlx(IEdge, K) += TracerWeight * (TracerCell(L, ICell1, K) +
@@ -634,7 +642,7 @@ class TracerHorzAdvOnCell {
 
       // Accumulate the scaled high order vertical tendencies
       // and the upwind tendencies
-      //do iCell = 1, nCellsOwned
+      //do ICell = 1, nCellsOwned
       const Real InvAreaCell1 = 1.0_Real / AreaCell(ICell);
 
       // Accumulate the scaled high order horizontal tendencies
@@ -669,7 +677,7 @@ class TracerHorzAdvOnCell {
 
    KOKKOS_FUNCTION void FCTComputeBudgetAdvectionTendency(const I4 L, const I4 ICell,
                                      Array2DReal &WorkTend) {
-      // iCell = 1, nCellsOwned
+      // ICell = 1, nCellsOwned
       for (I4 K = MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
          ActiveTracerHorizontalAdvectionTendency(L,ICell,K) = WorkTend(ICell,K);
       } 
@@ -680,7 +688,7 @@ class TracerHorzAdvOnCell {
       // non-monotone values and write warning if found
   
       // Perform check on host since print involved
-      //do iCell = 1, nCellsOwned
+      //do ICell = 1, nCellsOwned
       for (I4 K = MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
          if (TracerCell(L,ICell,K) < TracerMin(ICell, K)-Eps) {
            printf("Horizontal minimum out of bounds on tracer: %i %lg %lg\n", 
