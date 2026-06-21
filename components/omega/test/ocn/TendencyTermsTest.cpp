@@ -884,7 +884,12 @@ int testTracerHorzAdvOnCell(int NVertLayers, int NTracers, Real RTol) {
    // Compute numerical result
    Array3DReal NumTrFluxDiv("NumTrFluxDiv", NTracers, Mesh->NCellsOwned,
                             NVertLayers);
-   TracerHorzAdvOnCell TrHorzAdvOnC(Mesh, VCoord);
+
+   VertAdv::init();
+   const auto VAdv     = VertAdv::getDefault();
+   VertAdv::clear();
+
+   TracerHorzAdvOnCell TrHorzAdvOnC(Mesh, VCoord, VAdv);
    TrHorzAdvOnC.ForceLowOrder = true;
    TrHorzAdvOnC.init();
 
