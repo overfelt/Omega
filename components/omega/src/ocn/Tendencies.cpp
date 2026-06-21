@@ -789,7 +789,7 @@ void Tendencies::computeTracerTendenciesOnly(
   
 //      parallelForOuter( {Mesh->NEdgesAll},
 //         KOKKOS_LAMBDA(int IEdge, const TeamMember &Team) {
-           for (int IEdge=0; IEdge< Mesh->NEdgesAll; ++IEdge) {
+           for (int IEdge=0; IEdge< Mesh->NEdgesHalo(1); ++IEdge) {
              const int KMin   = LocMinLayerEdgeBot(IEdge);
              const int KMax   = LocMaxLayerEdgeTop(IEdge);
              const int KRange = vertRangeChunked(KMin, KMax);
@@ -809,18 +809,23 @@ void Tendencies::computeTracerTendenciesOnly(
   
 	   }
       } else {
-      parallelForOuter(
-          {NTracers, Mesh->NEdgesAll},
-          KOKKOS_LAMBDA(int L, int IEdge, const TeamMember &Team) {
+//    parallelForOuter(
+//        {NTracers, Mesh->NEdgesAll},
+//        KOKKOS_LAMBDA(int L, int IEdge, const TeamMember &Team) {
+for (int L=0; L<NTracers; ++L) {
+for (int IEdge=0; IEdge<Mesh->NEdgesAll; ++IEdge) {
              const int KMin   = LocMinLayerEdgeBot(IEdge);
              const int KMax   = LocMaxLayerEdgeTop(IEdge);
              const int KRange = vertRangeChunked(KMin, KMax);
-             parallelForInner(
-                 Team, KRange, INNER_LAMBDA(int KChunk) {
+//           parallelForInner(
+//               Team, KRange, INNER_LAMBDA(int KChunk) {
+for (int KChunk=KMin; KChunk<=KMax; ++KChunk) {
                     LocTracerHorzAdv(L, IEdge, KChunk, TracerArray,
                                      LocFluxPseudoThickEdge, LocNormalVelEdge);
-                 });
-          });
+//               });
+}
+//        });
+}}
       parallelForOuter(
           {NTracers, Mesh->NCellsAll},
           KOKKOS_LAMBDA(int L, int ICell, const TeamMember &Team) {

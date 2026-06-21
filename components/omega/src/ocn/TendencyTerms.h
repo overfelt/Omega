@@ -530,12 +530,12 @@ class TracerHorzAdvOnCell {
       // Compute 3rd or 4th fluxes where requested.
       for (int I = 0; I < NAdvCellsForEdge(IEdge); ++I) {
          const I4 ICell      = AdvCellsForEdge(IEdge, I);
-         const Real Coef1    = AdvCoefs(IEdge, I);
-         const Real Coef3    = AdvCoefs3rd(IEdge, I) * Coef3rdOrder;
+         const Real Coef1    = AdvCoefs(I, IEdge);
+         const Real Coef3    = AdvCoefs3rd(I, IEdge) * Coef3rdOrder;
          const I4 KStartCell = MinLayerCell(ICell);
          const I4 KLenCell   = MaxLayerCell(ICell);
          const I4 KEndCell   = KStartCell + KLenCell;
-         for (I4 K = KStartCell; K < KEndCell; ++K) {
+         for (I4 K = KStartCell; K <= KEndCell; ++K) {
             const Real NormalThicknessFlux =
                 FluxPseudoThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
             HighOrderFlx(IEdge, K) +=
@@ -543,13 +543,15 @@ class TracerHorzAdvOnCell {
                 AdvMaskHighOrder(IEdge, K) *
                 (Coef1 +
                  Coef3 * std::copysign(1.0_Real, NormalThicknessFlux));
+if (L==0 && IEdge==0 && K==0)
+std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<HighOrderFlx(IEdge, K)<<" "<<NormalThicknessFlux<<std::endl;
          }
       }
       // Compute 2nd order fluxes where needed.
       // Also compute low order upwind horizontal flux (monotonic)
       // Remove low order flux from the high order flux
       // Store left over high order flux in highOrderFlx array
-      for (I4 K = MinLayerEdgeBot(IEdge); K < MaxLayerEdgeTop(IEdge); ++K) {
+      for (I4 K = MinLayerEdgeBot(IEdge); K <= MaxLayerEdgeTop(IEdge); ++K) {
          const Real NormalThicknessFlux =
              FluxPseudoThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
          const Real TracerWeight = (1.0_Real - AdvMaskHighOrder(IEdge, K)) *
@@ -565,9 +567,11 @@ class TracerHorzAdvOnCell {
          HighOrderFlx(IEdge, K) += TracerWeight * (TracerCur(ICell1, K) +
                                                       TracerCur(ICell2, K));
          HighOrderFlx(IEdge, K) -= LowOrderFlx(IEdge, K);
+if (L==0 && IEdge==0 && K==0)
+std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<HighOrderFlx(IEdge, K)<<" "<<NormalThicknessFlux<<std::endl;
       }
 for (I4 K = KStart; K < KEnd; ++K)
-std::cout<<"HighOrderFlx "<<IEdge<<" "<<K<<" "<<HighOrderFlx(IEdge, K)<<std::endl;
+std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<HighOrderFlx(IEdge, K)<<std::endl;
    }
 
    KOKKOS_FUNCTION void FCTInitFluxInOut(const I4 L, const I4 ICell,
@@ -595,13 +599,13 @@ std::cout<<"HighOrderFlx "<<IEdge<<" "<<K<<" "<<HighOrderFlx(IEdge, K)<<std::end
       const I4 KStartCell    = chunkStart(KChunk, MinLayerCell(ICell));
       const I4 KLenCell = chunkLength(KChunk, KStartCell, MaxLayerCell(ICell));
       const I4 KEndCell = KStartCell + KLenCell - 1;
-      for (I4 K = KStartCell; K < KEndCell; ++K) {
+      for (I4 K = KStartCell; K <= KEndCell; ++K) {
          // Finish computing the low order horizontal fluxes
          // Upwind fluxes are accumulated in workTend
          for (I4 I = 0; I < NEdgesOnCell(ICell); ++I) {
             const I4 IEdge          = EdgesOnCell(ICell, I);
             const Real SignedFactor = EdgeSignOnCell(ICell, I) * InvAreaCell;
-            for (I4 K = MinLayerEdgeBot(IEdge); K < MaxLayerEdgeTop(IEdge);
+            for (I4 K = MinLayerEdgeBot(IEdge); K <= MaxLayerEdgeTop(IEdge);
                  ++K) {
                // Here workTend is the advection tendency due to the
                // upwind (low order) fluxes.
@@ -655,7 +659,7 @@ std::cout<<"HighOrderFlx "<<IEdge<<" "<<K<<" "<<HighOrderFlx(IEdge, K)<<std::end
       for (I4 I=0; I<NEdgesOnCell(ICell); ++I) {
          const I4 IEdge = EdgesOnCell(ICell, I);
          const Real SignedFactor = InvAreaCell1*EdgeSignOnCell(ICell,I);
-         for (I4 K = MinLayerEdgeBot(IEdge); K < MaxLayerEdgeTop(IEdge); ++K) {
+         for (I4 K = MinLayerEdgeBot(IEdge); K <= MaxLayerEdgeTop(IEdge); ++K) {
             // WorkTend on RHS is upwind tendency
             // WorkTend on LHS is total horiz advect tendency
             WorkTend(ICell,K) += SignedFactor*HighOrderFlx(IEdge,K);
@@ -673,7 +677,7 @@ std::cout<<"HighOrderFlx "<<IEdge<<" "<<K<<" "<<HighOrderFlx(IEdge, K)<<std::end
 
    KOKKOS_FUNCTION void FCTComputeBudgetAdvectionEdgeFlux(const I4 L, const I4 IEdge) {
       // iEdge = 1,nEdges
-      for (I4 K = MinLayerEdgeBot(IEdge); K < MaxLayerEdgeTop(IEdge); ++K) {
+      for (I4 K = MinLayerEdgeBot(IEdge); K <= MaxLayerEdgeTop(IEdge); ++K) {
          // Save u*h*T flux on edge for analysis. This variable will be
          // divided by h at the end of the time step.
          ActiveTracerHorizontalAdvectionEdgeFlux(L,IEdge,K) = 
@@ -713,6 +717,7 @@ std::cout<<"HighOrderFlx "<<IEdge<<" "<<K<<" "<<HighOrderFlx(IEdge, K)<<std::end
    const HorzMesh *HorzontalMesh;
    const VertCoord *VerticalCoord;
    const I4 NVertLayers;
+   const I4 NEdgesHalo;
 
    Array1DI4 NAdvCellsForEdge;
    Array2DI4 AdvCellsForEdge;

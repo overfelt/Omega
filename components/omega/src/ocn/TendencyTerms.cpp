@@ -7,6 +7,8 @@
 // defined in the corresponding header file.
 //
 //===----------------------------------------------------------------------===//
+#include <iomanip>
+#include <iostream>
 
 #include "TendencyTerms.h"
 #include "DataTypes.h"
@@ -73,8 +75,9 @@ BottomDragOnEdge::BottomDragOnEdge(const HorzMesh *Mesh,
 TracerHorzAdvOnCell::TracerHorzAdvOnCell(const HorzMesh *Mesh,
                                          const VertCoord *VCoord,
 					 const VertAdv *VAdv)
-    : HorzontalMesh(Mesh), VerticalCoord(VCoord),
+    : HorzontalMesh(Mesh), VerticalCoord(VCoord), 
       NVertLayers(VCoord->NVertLayers),
+      NEdgesHalo(Mesh->NEdgesHalo(1)),
       NAdvCellsForEdge("NumberOfCellsContribToAdvectionAtEdge",
                        Mesh->NEdgesAll),
       AdvCellsForEdge("IndexOfCellsContributingToAdvection", Mesh->NEdgesAll,
@@ -172,8 +175,8 @@ void TracerHorzAdvOnCell::init() {
       TracerCur = Array2DReal("TracerCur", NCellsAll+1, NVertLayers),
       TracerMax = Array2DReal("FCTTracerMax", NCellsAll, NVertLayers);
       TracerMin = Array2DReal("FCTTracerMin", NCellsAll, NVertLayers);
-      HighOrderFlx = Array2DReal("FCTHighOrderFlx", NEdgesAll, NVertLayers);
-      LowOrderFlx = Array2DReal("FCTLowhOrderFlx", NEdgesAll, NVertLayers);
+      HighOrderFlx = Array2DReal("FCTHighOrderFlx", std::max(NEdgesAll,NCellsAll)+1, NVertLayers+1);
+      LowOrderFlx = Array2DReal("FCTLowOrderFlx", std::max(NEdgesAll,NCellsAll)+1, NVertLayers+1);
       if (ComputeBudgets) {
 	 const int NTracers          = Tracers::getNumTracers();
          ActiveTracerHorizontalAdvectionEdgeFlux = 
