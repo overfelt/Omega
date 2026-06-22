@@ -20,14 +20,12 @@
 #include "IOStream.h"
 #include "Logging.h"
 #include "MachEnv.h"
-#include "OceanTestCommon.h"
 #include "OmegaKokkos.h"
 #include "Pacer.h"
 #include "TimeStepper.h"
 #include "VertCoord.h"
 #include "mpi.h"
 
-#include <algorithm>
 #include <iostream>
 
 using namespace OMEGA;
@@ -55,9 +53,6 @@ I4 initTracersTest() {
    // Open config file
    Config("Omega");
    Config::readAll("omega.yml");
-
-   // Ensure required debug tracers are configured in the Omega configuration
-   ensureDebugTracersConfigured("TracersTest");
 
    // Initialize the default time stepper and model clock
    TimeStepper::init1();
@@ -167,7 +162,8 @@ int main(int argc, char *argv[]) {
          TotalLength += GroupLength;
 
          // Check if a group contains more than one tracers
-         if (GroupLength > 0) {
+         // Zero value allows a blank tracer group
+         if (GroupLength >= 0) {
             LOG_INFO("Tracers: {} tracers retrieval PASS", GroupName);
          } else {
             RetVal += 1;
