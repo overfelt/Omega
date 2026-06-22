@@ -108,6 +108,9 @@ TracerHorzAdvOnCell::TracerHorzAdvOnCell(const HorzMesh *Mesh,
       LowOrderFlx(),
       MinLayerCell(VCoord->MinLayerCell),
       MaxLayerCell(VCoord->MaxLayerCell),
+      WorkTend(),
+      FlxIn(),
+      FlxOut(),
       ActiveTracerHorizontalAdvectionEdgeFlux(),
       ActiveTracerHorizontalAdvectionTendency() {
    deepCopy(HighOrderFlxHorz, 0);
@@ -177,6 +180,9 @@ void TracerHorzAdvOnCell::init() {
       TracerMin = Array2DReal("FCTTracerMin", NCellsAll, NVertLayers);
       HighOrderFlx = Array2DReal("FCTHighOrderFlx", std::max(NEdgesAll,NCellsAll)+1, NVertLayers+1);
       LowOrderFlx = Array2DReal("FCTLowOrderFlx", std::max(NEdgesAll,NCellsAll)+1, NVertLayers+1);
+      WorkTend = Array2DReal("WorkTend", NCellsAll+1, NVertLayers);
+      FlxIn = Array2DReal("FlxIn", NCellsAll+1, NVertLayers);
+      FlxOut = Array2DReal("FlxOut", NCellsAll+1, NVertLayers);
       if (ComputeBudgets) {
 	 const int NTracers          = Tracers::getNumTracers();
          ActiveTracerHorizontalAdvectionEdgeFlux = 

@@ -438,7 +438,7 @@ class TracerHorzAdvOnCell {
    KOKKOS_FUNCTION void FCTProvisionaLayerThicknesses(
        const I4 ICell, const I4 KChunk, const Real Dt,
        const Array2DReal &FluxPseudoThickEdge, 
-       const Array2DReal &PseudoThickCell,
+       const Array2DReal &LayerThickness,
        const Array2DReal &NormVelEdge) const {
 
 
@@ -447,7 +447,7 @@ class TracerHorzAdvOnCell {
 
       const Real InvAreaCell = Dt / AreaCell(ICell);
       for (I4 K = KStart; K < KEnd; ++K) {
-         HProv(ICell, K) = PseudoThickCell(ICell, K);
+         HProv(ICell, K) = LayerThickness(ICell, K);
       }
       for (I4 I = 0; I < NEdgesOnCell(ICell); ++I) {
          const I4 IEdge = EdgesOnCell(ICell, I);
@@ -518,7 +518,7 @@ class TracerHorzAdvOnCell {
       const Real Coef3rdOrder = 0.25;
 
       const I4 ICell1 = CellsOnEdge(IEdge, 0);
-      const I4 ICell2 = CellsOnEdge(IEdge, 0);
+      const I4 ICell2 = CellsOnEdge(IEdge, 1);
 
       const I4 KStart = KChunk * VecLength;
       const I4 KEnd   = KStart + VecLength;
@@ -574,10 +574,7 @@ for (I4 K = KStart; K < KEnd; ++K)
 std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<HighOrderFlx(IEdge, K)<<std::endl;
    }
 
-   KOKKOS_FUNCTION void FCTInitFluxInOut(const I4 L, const I4 ICell,
-                                         const I4 KChunk, Array2DReal &WorkTend,
-                                         Array2DReal &FlxIn,
-                                         Array2DReal &FlxOut) {
+   KOKKOS_FUNCTION void FCTInitFluxInOut(const I4 L, const I4 ICell, const I4 KChunk) {
       const I4 KStart = KChunk * VecLength;
       const I4 KEnd   = KStart + VecLength;
       for (I4 K = KStart; K < KEnd; ++K)
@@ -588,15 +585,10 @@ std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<H
          FlxOut(ICell, K) = 0;
    }
 
-   KOKKOS_FUNCTION void FCTFluxInOut(const I4 L, const I4 ICell,
-                                     const I4 KChunk, 
-				     const Array2DReal &PseudoThickCell,
-				     Array2DReal &WorkTend,
-                                     Array2DReal &FlxIn, Array2DReal &FlxOut,
-                                     const Real Dt,
-                                     const Array3DReal &TracerCell) const {
+   KOKKOS_FUNCTION void FCTFluxInOut(const I4 L, const I4 ICell, const I4 KChunk, 
+                                     const Real Dt, const Array2DReal &LayerThickness) const {
       const Real InvAreaCell = 1._Real / AreaCell(ICell);
-      const I4 KStartCell    = chunkStart(KChunk, MinLayerCell(ICell));
+      const I4 KStartCell = chunkStart(KChunk, MinLayerCell(ICell));
       const I4 KLenCell = chunkLength(KChunk, KStartCell, MaxLayerCell(ICell));
       const I4 KEndCell = KStartCell + KLenCell - 1;
       for (I4 K = KStartCell; K <= KEndCell; ++K) {
@@ -622,10 +614,10 @@ std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<H
          // Computed using the bounds that were computed previously,
          // and the bounds on the newly updated value
          // Factors are placed in the flxIn and flxOut arrays
-         for (I4 K = MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
+         for (I4 K = MinLayerCell(ICell); K <= MaxLayerCell(ICell); ++K) {
             // Here workTend is the upwind tendency
             const Real TracerUpwindNew =
-                (TracerCell(L, ICell, K) * PseudoThickCell(ICell, K) +
+                (TracerCur(ICell, K) * LayerThickness(ICell, K) +
                  Dt * WorkTend(ICell, K)) * HProvInv(ICell, K);
             const Real TracerMinNew =
                 TracerUpwindNew + Dt * FlxOut(ICell, K) * HProvInv(ICell, K);
@@ -643,17 +635,27 @@ std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<H
          }
       }
    }
-   KOKKOS_FUNCTION void FCTRescaleHighOrderFlux(const I4 L, const I4 ICell,
-                                     const Real Dt,
-                                     const Array3DReal &Tend,
-                                     Array2DReal &WorkTend,
-				     Array2DReal &PseudoThickCell,
-                                     const Array3DReal &TracerCell) const {
+
+   KOKKOS_FUNCTION void FCTRescaleHighOrderFlux(const I4 L, const I4 IEdge) const {
+      const I4 ICell1 = CellsOnEdge(IEdge, 0);
+      const I4 ICell2 = CellsOnEdge(IEdge, 1);
+      for (I4 K = MinLayerEdgeBot(IEdge); K <= MaxLayerEdgeTop(IEdge); ++K) {
+         HighOrderFlx(IEdge,K) = 
+	   Kokkos::max(0.0_Real,HighOrderFlx(IEdge,K)) * 
+	   Kokkos::min(FlxOut(ICell1,K), FlxIn (IEdge,K)) + 
+	   Kokkos::min(0.0_Real,HighOrderFlx(IEdge,K)) * 
+	   Kokkos::min(FlxIn (ICell1,K), FlxOut(IEdge,K));
+      }
+   }
+
+   KOKKOS_FUNCTION void FCTAccumulateHighOrderFlux(const I4 L, const I4 ICell, const I4 KChunk, const Real Dt,
+                                     const Array3DReal &TracerArray, const Array2DReal &LayerThickness) const {
 
       // Accumulate the scaled high order vertical tendencies
       // and the upwind tendencies
-      //do ICell = 1, nCellsOwned
       const Real InvAreaCell1 = 1.0_Real / AreaCell(ICell);
+      const I4 KStart = KChunk * VecLength;
+      const I4 KEnd   = KStart + VecLength;
 
       // Accumulate the scaled high order horizontal tendencies
       for (I4 I=0; I<NEdgesOnCell(ICell); ++I) {
@@ -665,48 +667,50 @@ std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<H
             WorkTend(ICell,K) += SignedFactor*HighOrderFlx(IEdge,K);
 	 }
       }
-      for (I4 K = MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
+      for (I4 K = KStart; K < KEnd; ++K) {
          // workTend  on RHS is total horiz advection tendency
-         // TracerCell on LHS is provisional tracer after
+         // TracerCur on LHS is provisional tracer after
          //                     horizontal fluxes only.
-         TracerCell(L, ICell, K) = 
-	   (TracerCell(L,ICell,K) * PseudoThickCell(ICell,K) + Dt*WorkTend(ICell,K)) * HProvInv(ICell,K);
-         Tend(L,ICell,K) += WorkTend(ICell,K);
+         TracerCur(ICell, K) = 
+	   (TracerCur(ICell,K) * LayerThickness(ICell,K) + Dt*WorkTend(ICell,K)) * HProvInv(ICell,K);
+         TracerArray(L,ICell,K) += WorkTend(ICell,K);
       }
    }
 
-   KOKKOS_FUNCTION void FCTComputeBudgetAdvectionEdgeFlux(const I4 L, const I4 IEdge) {
-      // iEdge = 1,nEdges
-      for (I4 K = MinLayerEdgeBot(IEdge); K <= MaxLayerEdgeTop(IEdge); ++K) {
-         // Save u*h*T flux on edge for analysis. This variable will be
-         // divided by h at the end of the time step.
+   KOKKOS_FUNCTION void FCTComputeBudgetAdvectionEdgeFlux(const I4 L, const I4 IEdge, const I4 KChunk) {
+       // Save u*h*T flux on edge for analysis. This variable will be
+       // divided by h at the end of the time step.
+       const I4 KStart = KChunk * VecLength;
+       const I4 KEnd   = KStart + VecLength;
+       for (I4 K = KStart; K < KEnd; ++K) {
          ActiveTracerHorizontalAdvectionEdgeFlux(L,IEdge,K) = 
             (LowOrderFlx(IEdge,K) + HighOrderFlx(IEdge,K))/DvEdge(IEdge);
       } 
    }
 
-   KOKKOS_FUNCTION void FCTComputeBudgetAdvectionTendency(const I4 L, const I4 ICell,
-                                     Array2DReal &WorkTend) {
-      // ICell = 1, nCellsOwned
-      for (I4 K = MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
+   KOKKOS_FUNCTION void FCTComputeBudgetAdvectionTendency(const I4 L, const I4 ICell, const I4 KChunk) {
+       const I4 KStart = KChunk * VecLength;
+       const I4 KEnd   = KStart + VecLength;
+       for (I4 K = KStart; K < KEnd; ++K) {
          ActiveTracerHorizontalAdvectionTendency(L,ICell,K) = WorkTend(ICell,K);
       } 
    }
-   KOKKOS_FUNCTION void FCTMonotonicityCheck(const I4 L, const I4 ICell,
-                                     const Array3DReal &TracerCell) const {
+
+   KOKKOS_FUNCTION void FCTMonotonicityCheck(const I4 L, const I4 ICell, const I4 KChunk,
+                                     const Array3DReal &TracerArray) const {
       // Check tracer values against local min,max to detect
       // non-monotone values and write warning if found
   
-      // Perform check on host since print involved
-      //do ICell = 1, nCellsOwned
-      for (I4 K = MinLayerCell(ICell); K < MaxLayerCell(ICell); ++K) {
-         if (TracerCell(L,ICell,K) < TracerMin(ICell, K)-Eps) {
+      const I4 KStart = KChunk * VecLength;
+      const I4 KEnd   = KStart + VecLength;
+      for (I4 K = KStart; K < KEnd; ++K) {
+         if (TracerArray(L,ICell,K) < TracerMin(ICell, K)-Eps) {
            printf("Horizontal minimum out of bounds on tracer: %i %lg %lg\n", 
-              L, TracerMin(ICell, K), TracerCell(L,ICell,K));
+              L, TracerMin(ICell, K), TracerArray(L,ICell,K));
 	 }
-         if (TracerCell(L,ICell,K) > TracerMax(ICell,K)+Eps) {
+         if (TracerArray(L,ICell,K) > TracerMax(ICell,K)+Eps) {
            printf("Horizontal maximum out of bounds on tracer: %i %lg %lg\n", 
-              L, TracerMax(ICell, K), TracerCell(L,ICell,K));
+              L, TracerMax(ICell, K), TracerArray(L,ICell,K));
 	 }
       }
    }
@@ -746,6 +750,9 @@ std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<H
    Array2DReal LowOrderFlx;
    Array1DI4 MinLayerCell;
    Array1DI4 MaxLayerCell;
+   Array2DReal WorkTend;
+   Array2DReal FlxIn;
+   Array2DReal FlxOut;
    Array3DReal ActiveTracerHorizontalAdvectionEdgeFlux;
    Array3DReal ActiveTracerHorizontalAdvectionTendency;
 };
