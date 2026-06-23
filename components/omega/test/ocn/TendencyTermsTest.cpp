@@ -1035,7 +1035,7 @@ int testSurfaceTracerRestoringOnCell(int NVertLayers, int NTracers, Real RTol) {
    // Test multiple cases with different combinations of tracers being restored
    const char *CaseLabels[3] = {"SurfaceTracerRestoringSalinityOnly",
                                 "SurfaceTracerRestoringTemperatureOnly",
-                                "SurfaceTracerRestoringTempSaltDebug"};
+                                "SurfaceTracerRestoringTempSalt"};
 
    const std::vector<std::vector<I4>> CaseTracerIds = {
        {1},    // Salinity Only
