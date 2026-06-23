@@ -154,6 +154,10 @@ class Tendencies {
    static Tendencies *get(const std::string &Name ///< [in]
    );
 
+   // check if tendencies exists by name
+   static bool exists(const std::string &Name ///< [in]
+   );
+
    // read and set config options
    void readConfig(Config *OmegaConfig);
 

@@ -61,8 +61,12 @@ void SfcStressForcingVars::registerFields(
 }
 
 void SfcStressForcingVars::unregisterFields() const {
-   Field::destroy(ZonalStressCell.label());
-   Field::destroy(MeridStressCell.label());
+   if (Field::exists(ZonalStressCell.label())) {
+      Field::destroy(ZonalStressCell.label());
+   }
+   if (Field::exists(MeridStressCell.label())) {
+      Field::destroy(MeridStressCell.label());
+   }
 }
 
 } // namespace OMEGA

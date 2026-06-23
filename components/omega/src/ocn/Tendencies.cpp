@@ -138,6 +138,15 @@ Tendencies *Tendencies::get(const std::string &Name ///< [in] Name of tendencies
 } // end get tendencies
 
 //------------------------------------------------------------------------------
+// Check if tendencies exists by name
+bool Tendencies::exists(const std::string &Name ///< [in] Name of tendencies
+) {
+
+   return AllTendencies.find(Name) != AllTendencies.end();
+
+} // end exists
+
+//------------------------------------------------------------------------------
 // read and set config options
 void Tendencies::readConfig(Config *OmegaConfig ///< [in] Omega config
 ) {
