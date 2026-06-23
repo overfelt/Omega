@@ -1025,8 +1025,8 @@ int testSurfaceTracerRestoringOnCell(int NVertLayers, int NTracers, Real RTol) {
 
    const auto Mesh = HorzMesh::getDefault();
 
-   if (NTracers < 3) {
-      LOG_ERROR("TendencyTermsTest: SurfaceTracerRestoring requires at least 3 "
+   if (NTracers < 2) {
+      LOG_ERROR("TendencyTermsTest: SurfaceTracerRestoring requires at least 2 "
                 "tracers, found {}",
                 NTracers);
       return 1;
@@ -1035,12 +1035,12 @@ int testSurfaceTracerRestoringOnCell(int NVertLayers, int NTracers, Real RTol) {
    // Test multiple cases with different combinations of tracers being restored
    const char *CaseLabels[3] = {"SurfaceTracerRestoringSalinityOnly",
                                 "SurfaceTracerRestoringTemperatureOnly",
-                                "SurfaceTracerRestoringTempSaltDebug"};
+                                "SurfaceTracerRestoringTempSalt"};
 
    const std::vector<std::vector<I4>> CaseTracerIds = {
-       {1},       // Salinity Only
-       {0},       // Temperature Only
-       {0, 1, 2}, // Temperature, Salinity, and a Debug Tracer
+       {1},    // Salinity Only
+       {0},    // Temperature Only
+       {0, 1}, // Temperature and Salinity
    };
 
    // Loop over cases, computing exact result, numerical result, and

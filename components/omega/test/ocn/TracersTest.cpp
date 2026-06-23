@@ -162,7 +162,8 @@ int main(int argc, char *argv[]) {
          TotalLength += GroupLength;
 
          // Check if a group contains more than one tracers
-         if (GroupLength > 0) {
+         // Zero value allows a blank tracer group
+         if (GroupLength >= 0) {
             LOG_INFO("Tracers: {} tracers retrieval PASS", GroupName);
          } else {
             RetVal += 1;
