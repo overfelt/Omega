@@ -197,6 +197,8 @@ void VertMix::computeVertMix(const Array2DReal &NormalVelocity,
        ComputeGradRichardsonNum); /// Local view for GradRichNum computation
    OMEGA_SCOPE(LocOneTwoOneFilter,
                ComputeOneTwoOneFilter); /// Local view for 1-2-1 filter
+   OMEGA_SCOPE(LocBackDiff, BackDiff);
+   OMEGA_SCOPE(LocBackVisc, BackVisc);
    OMEGA_SCOPE(MinLayerCell, VCoord->MinLayerCell);
    OMEGA_SCOPE(MaxLayerCell, VCoord->MaxLayerCell);
 
@@ -214,8 +216,8 @@ void VertMix::computeVertMix(const Array2DReal &NormalVelocity,
                  const int KLen   = chunkLength(KChunk, KStart, KMax);
                  for (int KVec = 0; KVec < KLen; ++KVec) {
                     const int K           = KStart + KVec;
-                    LocVertDiff(ICell, K) = BackDiff;
-                    LocVertVisc(ICell, K) = BackVisc;
+                    LocVertDiff(ICell, K) = LocBackDiff;
+                    LocVertVisc(ICell, K) = LocBackVisc;
                     LocGradRichNum(ICell, K) =
                         LocComputeGradRichardsonNum.RiInitValue;
                     LocGradRichNumSmoothed(ICell, K) =
