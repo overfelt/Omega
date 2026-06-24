@@ -66,7 +66,7 @@ class Tendencies {
    SSHGradOnEdge SSHGrad;
    VelocityDiffusionOnEdge VelocityDiffusion;
    VelocityHyperDiffOnEdge VelocityHyperDiff;
-   WindForcingOnEdge WindForcing;
+   SfcStressForcingOnEdge SfcStressForcing;
    BottomDragOnEdge BottomDrag;
    TracerHorzAdvOnCell TracerHorzAdv;
    TracerDiffOnCell TracerDiffusion;
@@ -152,6 +152,10 @@ class Tendencies {
 
    // get tendencies by name
    static Tendencies *get(const std::string &Name ///< [in]
+   );
+
+   // check if tendencies exists by name
+   static bool exists(const std::string &Name ///< [in]
    );
 
    // read and set config options

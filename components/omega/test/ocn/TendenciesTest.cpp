@@ -8,6 +8,7 @@
 #include "Eos.h"
 #include "Error.h"
 #include "Field.h"
+#include "Forcing.h"
 #include "GlobalConstants.h"
 #include "Halo.h"
 #include "HorzMesh.h"
@@ -140,6 +141,7 @@ int initTendenciesTest(const std::string &mesh) {
    VertAdv::init();
    PressureGrad::init();
    Eos::init();
+   Forcing::init();
 
    int StateErr = OceanState::init();
    if (StateErr != 0) {
@@ -216,15 +218,89 @@ int testTendencies() {
    // compute tendencies
    const auto *State       = OceanState::getDefault();
    const auto *AuxState    = AuxiliaryState::getDefault();
+   auto *DefForcing        = Forcing::getDefault();
    Array3DReal TracerArray = Tracers::getAll(0);
    int ThickTimeLevel      = 0;
    int VelTimeLevel        = 0;
    int TracerTimeLevel     = 0;
    TimeInstant Time;
    TimeInterval Interval(1., TimeUnits::Seconds);
+
+   if (DefForcing == nullptr) {
+      LOG_ERROR("TendenciesTest: Default forcing retrieval FAIL");
+      Tendencies::clear();
+      return -1;
+   }
+
+   auto &ZonalStressCell  = DefForcing->SfcStressForcing.ZonalStressCell;
+   auto &MeridStressCell  = DefForcing->SfcStressForcing.MeridStressCell;
+   auto &NormalStressEdge = DefForcing->SfcStressForcing.NormalStressEdge;
+
+   const bool OrigSfcStressEnabled = DefTendencies->SfcStressForcing.Enabled;
+   Array2DReal BaselineNormalVelocityTend(
+       "BaselineNormalVelocityTend", Mesh->NEdgesSize, VCoord->NVertLayers);
+
+   DefTendencies->SfcStressForcing.Enabled = false;
    DefTendencies->computeAllTendencies(State, AuxState, TracerArray,
                                        ThickTimeLevel, VelTimeLevel,
                                        TracerTimeLevel, Time, Interval);
+   deepCopy(BaselineNormalVelocityTend, DefTendencies->NormalVelocityTend);
+
+   deepCopy(DefTendencies->PseudoThicknessTend, NAN);
+   deepCopy(DefTendencies->NormalVelocityTend, NAN);
+   deepCopy(DefTendencies->TracerTend, NAN);
+
+   DefTendencies->SfcStressForcing.Enabled = true;
+   deepCopy(ZonalStressCell, 1._Real);
+   deepCopy(MeridStressCell, 0.5_Real);
+   deepCopy(NormalStressEdge, NAN);
+   DefForcing->computeAll();
+
+   DefTendencies->computeAllTendencies(State, AuxState, TracerArray,
+                                       ThickTimeLevel, VelTimeLevel,
+                                       TracerTimeLevel, Time, Interval);
+
+   Array2DReal NormalVelocityTendDiff("NormalVelocityTendDiff",
+                                      Mesh->NEdgesSize, VCoord->NVertLayers);
+   deepCopy(NormalVelocityTendDiff, 0._Real);
+
+   OMEGA_SCOPE(LocNormalVelocityTendDiff, NormalVelocityTendDiff);
+   OMEGA_SCOPE(LocBaselineNormalVelocityTend, BaselineNormalVelocityTend);
+   OMEGA_SCOPE(LocNormalVelocityTend, DefTendencies->NormalVelocityTend);
+   OMEGA_SCOPE(MinLayerEdgeBot, VCoord->MinLayerEdgeBot);
+   OMEGA_SCOPE(MaxLayerEdgeTop, VCoord->MaxLayerEdgeTop);
+
+   parallelForOuter(
+       "TendenciesTest:NormalVelocityTendDiff", {Mesh->NEdgesAll},
+       KOKKOS_LAMBDA(int IEdge, const TeamMember &Team) {
+          const int KMin   = MinLayerEdgeBot(IEdge);
+          const int KMax   = MaxLayerEdgeTop(IEdge);
+          const int KRange = vertRangeChunked(KMin, KMax);
+
+          parallelForInner(
+              Team, KRange, INNER_LAMBDA(int KChunk) {
+                 for (int K = KChunk; K <= KMax; K += VecLength) {
+                    if (K >= KMin) {
+                       LocNormalVelocityTendDiff(IEdge, K) =
+                           Kokkos::abs(LocNormalVelocityTend(IEdge, K) -
+                                       LocBaselineNormalVelocityTend(IEdge, K));
+                    }
+                 }
+              });
+       });
+
+   const Real NormVelTendDelta =
+       sum(NormalVelocityTendDiff, Mesh->NEdgesOwned, VCoord->MinLayerEdgeBot,
+           VCoord->MaxLayerEdgeTop);
+   constexpr Real DeltaATol = 1e-12_Real;
+   if (!Kokkos::isfinite(NormVelTendDelta) ||
+       isApprox(NormVelTendDelta, 0._Real, 0._Real, DeltaATol)) {
+      Err++;
+      LOG_ERROR("TendenciesTest: SfcStress forcing did not change "
+                "NormalVelocityTend");
+   }
+
+   DefTendencies->SfcStressForcing.Enabled = OrigSfcStressEnabled;
 
    // check that everything got computed correctly
    int NCellsOwned = Mesh->NCellsOwned;
@@ -261,6 +337,7 @@ int testTendencies() {
 }
 
 void finalizeTendenciesTest() {
+   Forcing::clear();
    Tracers::clear();
    PressureGrad::clear();
    Eos::destroyInstance();

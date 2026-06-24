@@ -19,7 +19,6 @@
 #include "auxiliaryVars/TracerAuxVars.h"
 #include "auxiliaryVars/VelocityDel2AuxVars.h"
 #include "auxiliaryVars/VorticityAuxVars.h"
-#include "auxiliaryVars/WindForcingAuxVars.h"
 #include "mpi.h"
 
 #include <cmath>
@@ -66,9 +65,6 @@ struct TestSetupPlane {
    ErrorMeasures ExpectedDel2TracerErrors = {0.0033346711042859123,
                                              0.0029202923731303323};
 
-   ErrorMeasures ExpectedNormalStressErrors = {0.0033910709836867704,
-                                               0.0039954090464502795};
-
    KOKKOS_FUNCTION Real pseudoThickness(Real X, Real Y) const {
       return 2 + std::cos(TwoPi * X / Lx) * std::cos(TwoPi * Y / Ly);
    }
@@ -79,14 +75,6 @@ struct TestSetupPlane {
 
    KOKKOS_FUNCTION Real velocityY(Real X, Real Y) const {
       return std::cos(TwoPi * X / Lx) * std::sin(TwoPi * Y / Ly);
-   }
-
-   KOKKOS_FUNCTION Real windStressX(Real X, Real Y) const {
-      return std::cos(TwoPi * X / Lx) * std::sin(TwoPi * Y / Ly);
-   }
-
-   KOKKOS_FUNCTION Real windStressY(Real X, Real Y) const {
-      return std::sin(TwoPi * X / Lx) * std::cos(TwoPi * Y / Ly);
    }
 
    KOKKOS_FUNCTION Real divergence(Real X, Real Y) const {
@@ -194,9 +182,6 @@ struct TestSetupSphere {
    ErrorMeasures ExpectedDel2TracerErrors = {0.0081206665417422382,
                                              0.004969575978774801};
 
-   ErrorMeasures ExpectedNormalStressErrors = {0.0038588958862868362,
-                                               0.003813760171030077};
-
    KOKKOS_FUNCTION Real pseudoThickness(Real Lon, Real Lat) const {
       return (2 + std::cos(Lon) * std::pow(std::cos(Lat), 4));
    }
@@ -208,14 +193,6 @@ struct TestSetupSphere {
    KOKKOS_FUNCTION Real velocityY(Real Lon, Real Lat) const {
       return -4 * std::sin(Lon) * std::cos(Lon) * std::pow(std::cos(Lat), 3) *
              std::sin(Lat);
-   }
-   KOKKOS_FUNCTION Real windStressX(Real Lon, Real Lat) const {
-      return -4 * std::sin(Lon) * std::cos(Lon) * std::pow(std::cos(Lat), 3) *
-             std::sin(Lat);
-   }
-
-   KOKKOS_FUNCTION Real windStressY(Real Lon, Real Lat) const {
-      return -std::pow(std::sin(Lon), 2) * std::pow(std::cos(Lat), 3);
    }
 
    KOKKOS_FUNCTION Real relativeVorticity(Real Lon, Real Lat) const {
@@ -391,57 +368,6 @@ int testKineticAuxVars(const Array2DReal &PseudoThicknessCell,
 
    if (Err == 0) {
       LOG_INFO("AuxVarsTest: KineticAuxVars PASS");
-   }
-
-   return Err;
-}
-
-int testWindForcingAuxVars(Real RTol) {
-   int Err = 0;
-   TestSetup Setup;
-
-   const auto Mesh = HorzMesh::getDefault();
-
-   // Compute exact result
-
-   Array1DReal ExactNormalStressEdge("ExactNormalStressEdge",
-                                     Mesh->NEdgesOwned);
-   Err += setVectorEdge(
-       KOKKOS_LAMBDA(Real(&VecField)[2], Real X, Real Y) {
-          VecField[0] = Setup.windStressX(X, Y);
-          VecField[1] = Setup.windStressY(X, Y);
-       },
-       ExactNormalStressEdge, EdgeComponent::Normal, Geom, Mesh,
-       ExchangeHalos::No);
-
-   WindForcingAuxVars WindForcingAux("", Mesh);
-   WindForcingAux.InterpChoice = InterpCellToEdgeOption::Anisotropic;
-
-   // Set inputs
-   Err += setScalar(
-       KOKKOS_LAMBDA(Real X, Real Y) { return Setup.windStressX(X, Y); },
-       WindForcingAux.ZonalStressCell, Geom, Mesh, OnCell);
-
-   Err += setScalar(
-       KOKKOS_LAMBDA(Real X, Real Y) { return Setup.windStressY(X, Y); },
-       WindForcingAux.MeridStressCell, Geom, Mesh, OnCell);
-
-   // Compute numerical result
-   parallelFor(
-       {Mesh->NEdgesOwned},
-       KOKKOS_LAMBDA(int IEdge) { WindForcingAux.computeVarsOnEdge(IEdge); });
-   const auto &NumNormalStressEdge = WindForcingAux.NormalStressEdge;
-
-   // Compute error measures and check error values
-   ErrorMeasures NormalStressErrors;
-   Err += computeErrors(NormalStressErrors, NumNormalStressEdge,
-                        ExactNormalStressEdge, Mesh, OnEdge);
-
-   Err += checkErrors("AuxVarsTest", "NormalStress", NormalStressErrors,
-                      Setup.ExpectedNormalStressErrors, RTol);
-
-   if (Err == 0) {
-      LOG_INFO("AuxVarsTest: WindForcingAuxVars PASS");
    }
 
    return Err;
@@ -857,8 +783,6 @@ int auxVarsTest(const std::string &mesh = DefaultMeshFile) {
    Err += testVelocityDel2AuxVars(RTol);
 
    Err += testTracerAuxVars(PseudoThickCell, NormalVelEdge, RTol);
-
-   Err += testWindForcingAuxVars(RTol);
 
    if (Err == 0) {
       LOG_INFO("AuxVarsTest: Successful completion");
