@@ -228,8 +228,7 @@ void Tendencies::readConfig(Config *OmegaConfig ///< [in] Omega config
       CHECK_ERROR_ABORT(
           Err,
           "Tendencies: HorzTracerFluxLimiterEnable not found in AdvectConfig");
-      std::cout<<__FILE__<<":"<<__LINE__<<" Set TracerHorzAdv.FCT to true"<<std::endl;
-      TracerHorzAdv.FCT = true;
+      std::cout<<__FILE__<<":"<<__LINE__<<" Set TracerHorzAdv.FCT to "<<TracerHorzAdv.FCT<<std::endl;
    }
    Err += TendConfig.get("TracerDiffTendencyEnable",
                          this->TracerDiffusion.Enabled);
@@ -733,7 +732,6 @@ void Tendencies::computeTracerTendenciesOnly(
               Team, Range{KMin, KMax},
               INNER_LAMBDA(int K) { LocTracerTend(L, ICell, K) = 0; });
        });
-
    // compute tracer horizotal advection
    R8 Dt = 0;
    TimeStep.get(Dt, TimeUnits::Seconds);
@@ -755,6 +753,7 @@ void Tendencies::computeTracerTendenciesOnly(
 	}
 //           });
 //        });
+	Kokkos::fence();
 	for (int L=0; L< NTracers; ++L) {
 //      parallelForOuter( {Mesh->NCellsAll},
 //         KOKKOS_LAMBDA(int ICell, const TeamMember &Team) {
@@ -770,6 +769,7 @@ void Tendencies::computeTracerTendenciesOnly(
 	  }
 //           });
 //        });
+	Kokkos::fence();
 //      parallelForOuter( {Mesh->NCellsAll},
 //         KOKKOS_LAMBDA(int ICell, const TeamMember &Team) {
 	   for (int ICell=0; ICell< Mesh->NCellsAll; ++ICell) {
@@ -785,6 +785,7 @@ void Tendencies::computeTracerTendenciesOnly(
 	  }
 //           });
 //        });
+	Kokkos::fence();
   
   
 //      parallelForOuter( {Mesh->NEdgesHalo(1)},
@@ -803,6 +804,7 @@ void Tendencies::computeTracerTendenciesOnly(
           }
 //           });
 //        });
+	Kokkos::fence();
   
   
 //      parallelForOuter( {Mesh->NCellsHalo(0)},
@@ -819,6 +821,7 @@ void Tendencies::computeTracerTendenciesOnly(
           }
 //           });
 //        });
+	Kokkos::fence();
 
 //      parallelForOuter( {Mesh->NCellsHalo(0)},
 //         KOKKOS_LAMBDA(int ICell, const TeamMember &Team) {
@@ -834,6 +837,7 @@ void Tendencies::computeTracerTendenciesOnly(
           }
 //           });
 //        });
+	Kokkos::fence();
   
 //      parallelForOuter( {Mesh->NEdgesHalo(1)},
 //         KOKKOS_LAMBDA(int IEdge, const TeamMember &Team) {
@@ -844,11 +848,12 @@ void Tendencies::computeTracerTendenciesOnly(
 //           parallelForInner(
 //               Team, KRange, INNER_LAMBDA(int KChunk) {
               for (int KChunk=KMin; KChunk <= KMax; ++KChunk) {
-                  LocTracerHorzAdv.FCTRescaleHighOrderFlux(L, IEdge);
+                  LocTracerHorzAdv.FCTRescaleHighOrderFlux(L, IEdge, KChunk);
              }
           }
 //           });
 //        });
+	Kokkos::fence();
   
 //      parallelForOuter( {Mesh->NCellsHalo(0)},
 //         KOKKOS_LAMBDA(int ICell, const TeamMember &Team) {
@@ -860,11 +865,12 @@ void Tendencies::computeTracerTendenciesOnly(
 //               Team, KRange, INNER_LAMBDA(int KChunk) {
               for (int KChunk=KMin; KChunk <= KMax; ++KChunk) {
                   LocTracerHorzAdv.FCTAccumulateHighOrderFlux(L, ICell, KChunk, Dt,
-		      TracerArray, LocPseudoThickCell);
+		      LocTracerTend, LocPseudoThickCell);
              }
           }
 //           });
 //        });
+	Kokkos::fence();
   
   
           if (LocTracerHorzAdv.ComputeBudgets) {
@@ -914,6 +920,7 @@ void Tendencies::computeTracerTendenciesOnly(
 	   }
 //           });
 //        });
+	Kokkos::fence();
   
 	   }
       } else {

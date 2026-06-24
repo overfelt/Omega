@@ -459,8 +459,6 @@ class TracerHorzAdvOnCell {
             const Real NormalThicknessFlux =
                 FluxPseudoThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
             HProv(ICell, K) += SignedFactor * NormalThicknessFlux;
-//std::cout<<"HProv "<<ICell<<" "<<I<<" "<<K<<" "<<std::setprecision(14)<<HProv(ICell, K)
-//<<" "<<NormalThicknessFlux<<" "<<FluxPseudoThickEdge(IEdge, K)<<" "<<NormVelEdge(IEdge, K)<<std::endl;
          }
       }
       // New layer thickness is after horizontal and vertical
@@ -538,13 +536,9 @@ class TracerHorzAdvOnCell {
          for (I4 K = KStartCell; K <= KEndCell; ++K) {
             const Real NormalThicknessFlux =
                 FluxPseudoThickEdge(IEdge, K) * NormVelEdge(IEdge, K);
-            HighOrderFlx(IEdge, K) +=
-                TracerCur(ICell, K) * NormalThicknessFlux *
-                AdvMaskHighOrder(IEdge, K) *
-                (Coef1 +
-                 Coef3 * std::copysign(1.0_Real, NormalThicknessFlux));
-if (L==0 && IEdge==0 && K==0)
-std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<HighOrderFlx(IEdge, K)<<" "<<NormalThicknessFlux<<std::endl;
+            const Real TracerWgt = 
+		NormalThicknessFlux * (Coef1 + Coef3 * std::copysign(1.0_Real, NormalThicknessFlux));
+            HighOrderFlx(IEdge, K) += TracerWgt * TracerCur(ICell, K) * AdvMaskHighOrder(IEdge, K);
          }
       }
       // Compute 2nd order fluxes where needed.
@@ -567,11 +561,9 @@ std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<H
          HighOrderFlx(IEdge, K) += TracerWeight * (TracerCur(ICell1, K) +
                                                       TracerCur(ICell2, K));
          HighOrderFlx(IEdge, K) -= LowOrderFlx(IEdge, K);
-if (L==0 && IEdge==0 && K==0)
-std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<HighOrderFlx(IEdge, K)<<" "<<NormalThicknessFlux<<std::endl;
       }
-for (I4 K = KStart; K < KEnd; ++K)
-std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<HighOrderFlx(IEdge, K)<<std::endl;
+//int K=0; if (L==0 && IEdge==0 && K==0) 
+//std::cout<<"HighOrderFlx "<<__LINE__<<" "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<HighOrderFlx(IEdge, K)+LowOrderFlx(IEdge, K)<<std::endl;
    }
 
    KOKKOS_FUNCTION void FCTInitFluxInOut(const I4 L, const I4 ICell, const I4 KChunk) {
@@ -636,15 +628,17 @@ std::cout<<"HighOrderFlx "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<H
       }
    }
 
-   KOKKOS_FUNCTION void FCTRescaleHighOrderFlux(const I4 L, const I4 IEdge) const {
+   KOKKOS_FUNCTION void FCTRescaleHighOrderFlux(const I4 L, const I4 IEdge, const I4 KChunk) const {
       const I4 ICell1 = CellsOnEdge(IEdge, 0);
       const I4 ICell2 = CellsOnEdge(IEdge, 1);
-      for (I4 K = MinLayerEdgeBot(IEdge); K <= MaxLayerEdgeTop(IEdge); ++K) {
+      const I4 KStart = KChunk * VecLength;
+      const I4 KEnd   = KStart + VecLength;
+      for (I4 K = KStart; K < KEnd; ++K) {
          HighOrderFlx(IEdge,K) = 
 	   Kokkos::max(0.0_Real,HighOrderFlx(IEdge,K)) * 
-	   Kokkos::min(FlxOut(ICell1,K), FlxIn (IEdge,K)) + 
+	   Kokkos::min(FlxOut(ICell1,K), FlxIn (ICell2,K)) + 
 	   Kokkos::min(0.0_Real,HighOrderFlx(IEdge,K)) * 
-	   Kokkos::min(FlxIn (ICell1,K), FlxOut(IEdge,K));
+	   Kokkos::min(FlxIn (ICell1,K), FlxOut(ICell2,K));
       }
    }
 
