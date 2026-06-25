@@ -772,7 +772,7 @@ void Tendencies::computeTracerTendenciesOnly(
                   });
             });
             Kokkos::fence();
-            parallelForOuter( {Mesh->NEdgesHalo(1)},
+            parallelForOuter( {Mesh->NEdgesHaloH(1)},
                KOKKOS_LAMBDA(int IEdge, const TeamMember &Team) {
                   const int KMin   = LocMinLayerEdgeBot(IEdge);
                   const int KMax   = LocMaxLayerEdgeTop(IEdge);
@@ -794,7 +794,7 @@ void Tendencies::computeTracerTendenciesOnly(
                   });
             });
             Kokkos::fence();
-            parallelForOuter( {Mesh->NCellsHalo(0)},
+            parallelForOuter( {Mesh->NCellsHaloH(0)},
                KOKKOS_LAMBDA(int ICell, const TeamMember &Team) {
                   const int KMin   = LocMinLayerCell(ICell);
                   const int KMax   = LocMaxLayerCell(ICell);
@@ -804,7 +804,7 @@ void Tendencies::computeTracerTendenciesOnly(
                   });
             });
             Kokkos::fence();
-            parallelForOuter( {Mesh->NEdgesHalo(0)},
+            parallelForOuter( {Mesh->NEdgesHaloH(0)},
                KOKKOS_LAMBDA(int IEdge, const TeamMember &Team) {
                   const int KMin   = LocMinLayerEdgeBot(IEdge);
                   const int KMax   = LocMaxLayerEdgeTop(IEdge);
@@ -826,7 +826,7 @@ void Tendencies::computeTracerTendenciesOnly(
             });
             Kokkos::fence();
             if (LocTracerHorzAdv.ComputeBudgets) {
-               parallelForOuter( {Mesh->NEdgesHalo(1)},
+               parallelForOuter( {Mesh->NEdgesHaloH(1)},
                   KOKKOS_LAMBDA(int IEdge, const TeamMember &Team) {
                      const int KMin   = LocMinLayerEdgeBot(IEdge);
                      const int KMax   = LocMaxLayerEdgeTop(IEdge);

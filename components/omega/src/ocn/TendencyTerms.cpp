@@ -77,7 +77,6 @@ TracerHorzAdvOnCell::TracerHorzAdvOnCell(const HorzMesh *Mesh,
 					 const VertAdv *VAdv)
     : HorzontalMesh(Mesh), VerticalCoord(VCoord), 
       NVertLayers(VCoord->NVertLayers),
-      NEdgesHalo(Mesh->NEdgesHalo(1)),
       NAdvCellsForEdge("NumberOfCellsContribToAdvectionAtEdge",
                        Mesh->NEdgesAll),
       AdvCellsForEdge("IndexOfCellsContributingToAdvection", Mesh->NEdgesAll,

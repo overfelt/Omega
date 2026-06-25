@@ -713,7 +713,6 @@ class TracerHorzAdvOnCell {
    const HorzMesh *HorzontalMesh;
    const VertCoord *VerticalCoord;
    const I4 NVertLayers;
-   const I4 NEdgesHalo;
 
    Array1DI4 NAdvCellsForEdge;
    Array2DI4 AdvCellsForEdge;
