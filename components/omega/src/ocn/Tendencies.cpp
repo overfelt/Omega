@@ -228,7 +228,6 @@ void Tendencies::readConfig(Config *OmegaConfig ///< [in] Omega config
       CHECK_ERROR_ABORT(
           Err,
           "Tendencies: HorzTracerFluxLimiterEnable not found in AdvectConfig");
-      std::cout<<__FILE__<<":"<<__LINE__<<" Set TracerHorzAdv.FCT to "<<TracerHorzAdv.FCT<<std::endl;
    }
    Err += TendConfig.get("TracerDiffTendencyEnable",
                          this->TracerDiffusion.Enabled);
