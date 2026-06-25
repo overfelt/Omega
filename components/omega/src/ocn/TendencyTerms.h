@@ -510,7 +510,7 @@ class TracerHorzAdvOnCell {
    }
 
    KOKKOS_FUNCTION void FCTHighAndLowOrderFlux(
-       const I4 L, const I4 IEdge, const I4 KChunk,
+       const I4 IEdge, const I4 KChunk,
        const Array1DI4 &MinLayerCell, const Array1DI4 &MaxLayerCell,
        const Array2DReal &FluxPseudoThickEdge, const Array2DReal &NormVelEdge) const {
       const Real Coef3rdOrder = 0.25;
@@ -562,11 +562,9 @@ class TracerHorzAdvOnCell {
                                                       TracerCur(ICell2, K));
          HighOrderFlx(IEdge, K) -= LowOrderFlx(IEdge, K);
       }
-//int K=0; if (L==0 && IEdge==0 && K==0) 
-//std::cout<<"HighOrderFlx "<<__LINE__<<" "<<L<<" "<<IEdge<<" "<<K<<" "<<std::setprecision(14)<<HighOrderFlx(IEdge, K)+LowOrderFlx(IEdge, K)<<std::endl;
    }
 
-   KOKKOS_FUNCTION void FCTInitFluxInOut(const I4 L, const I4 ICell, const I4 KChunk) {
+   KOKKOS_FUNCTION void FCTInitFluxInOut(const I4 ICell, const I4 KChunk) const {
       const I4 KStart = KChunk * VecLength;
       const I4 KEnd   = KStart + VecLength;
       for (I4 K = KStart; K < KEnd; ++K)
@@ -577,7 +575,7 @@ class TracerHorzAdvOnCell {
          FlxOut(ICell, K) = 0;
    }
 
-   KOKKOS_FUNCTION void FCTFluxInOut(const I4 L, const I4 ICell, const I4 KChunk, 
+   KOKKOS_FUNCTION void FCTFluxInOut(const I4 ICell, const I4 KChunk, 
                                      const Real Dt, const Array2DReal &LayerThickness) const {
       const Real InvAreaCell = 1._Real / AreaCell(ICell);
       const I4 KStartCell = chunkStart(KChunk, MinLayerCell(ICell));
@@ -628,7 +626,7 @@ class TracerHorzAdvOnCell {
       }
    }
 
-   KOKKOS_FUNCTION void FCTRescaleHighOrderFlux(const I4 L, const I4 IEdge, const I4 KChunk) const {
+   KOKKOS_FUNCTION void FCTRescaleHighOrderFlux(const I4 IEdge, const I4 KChunk) const {
       const I4 ICell1 = CellsOnEdge(IEdge, 0);
       const I4 ICell2 = CellsOnEdge(IEdge, 1);
       const I4 KStart = KChunk * VecLength;
@@ -671,7 +669,7 @@ class TracerHorzAdvOnCell {
       }
    }
 
-   KOKKOS_FUNCTION void FCTComputeBudgetAdvectionEdgeFlux(const I4 L, const I4 IEdge, const I4 KChunk) {
+   KOKKOS_FUNCTION void FCTComputeBudgetAdvectionEdgeFlux(const I4 L, const I4 IEdge, const I4 KChunk) const {
        // Save u*h*T flux on edge for analysis. This variable will be
        // divided by h at the end of the time step.
        const I4 KStart = KChunk * VecLength;
@@ -682,7 +680,7 @@ class TracerHorzAdvOnCell {
       } 
    }
 
-   KOKKOS_FUNCTION void FCTComputeBudgetAdvectionTendency(const I4 L, const I4 ICell, const I4 KChunk) {
+   KOKKOS_FUNCTION void FCTComputeBudgetAdvectionTendency(const I4 L, const I4 ICell, const I4 KChunk) const {
        const I4 KStart = KChunk * VecLength;
        const I4 KEnd   = KStart + VecLength;
        for (I4 K = KStart; K < KEnd; ++K) {
