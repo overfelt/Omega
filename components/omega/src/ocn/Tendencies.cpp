@@ -226,8 +226,15 @@ void Tendencies::readConfig(Config *OmegaConfig ///< [in] Omega config
       }
       Err += AdvectConfig.get("HorzTracerFluxLimiterEnable", TracerHorzAdv.FCT);
       CHECK_ERROR_ABORT(
-          Err,
-          "Tendencies: HorzTracerFluxLimiterEnable not found in AdvectConfig");
+          Err, "Tendencies: HorzTracerFluxLimiterEnable not found in AdvectConfig");
+      if (TracerHorzAdv.FCT) {
+	Err += AdvectConfig.get("HorzTracerFluxLimiterBudgetsEnable", TracerHorzAdv.ComputeBudgets);
+        CHECK_ERROR_ABORT(
+          Err, "Tendencies: HorzTracerFluxLimiterBudgetsEnable not found in AdvectConfig");
+	Err += AdvectConfig.get("HorzTracerFluxLimiterMonotonicityCheckEnable", TracerHorzAdv.MonotonicityCheck);
+        CHECK_ERROR_ABORT(
+          Err, "Tendencies: HorzTracerFluxLimiterMonotonicityCheckEnable not found in AdvectConfig");
+      }
    }
    Err += TendConfig.get("TracerDiffTendencyEnable",
                          this->TracerDiffusion.Enabled);
