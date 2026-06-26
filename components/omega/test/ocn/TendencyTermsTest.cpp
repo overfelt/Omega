@@ -886,7 +886,7 @@ int testTracerHorzAdvOnCell(int NVertLayers, int NTracers, Real RTol) {
                             NVertLayers);
 
    VertAdv::init();
-   const auto VAdv     = VertAdv::getDefault();
+   const auto VAdv = VertAdv::getDefault();
    VertAdv::clear();
 
    TracerHorzAdvOnCell TrHorzAdvOnC(Mesh, VCoord, VAdv);
