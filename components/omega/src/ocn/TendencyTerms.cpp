@@ -183,9 +183,10 @@ void TracerHorzAdvOnCell::init() {
       FlxIn = Array2DReal("FlxIn", NCellsAll+1, NVertLayers);
       FlxOut = Array2DReal("FlxOut", NCellsAll+1, NVertLayers);
       if (ComputeBudgets) {
-	 const int NTracers          = Tracers::getNumTracers();
+	 const int NTracers = Tracers::getNumTracers();
+	 const int NEdges   = Mesh->NEdgesHaloH(1);
          ActiveTracerHorizontalAdvectionEdgeFlux = 
-	   Array3DReal("FCTActiveTracerHorizontalAdvectionEdgeFlux", NTracers, NCellsAll, NVertLayers);
+	   Array3DReal("FCTActiveTracerHorizontalAdvectionEdgeFlux", NTracers, NEdges, NVertLayers);
          ActiveTracerHorizontalAdvectionTendency = 
 	   Array3DReal("FCTActiveTracerHorizontalAdvectionTendency", NTracers, NCellsAll, NVertLayers);
       }
