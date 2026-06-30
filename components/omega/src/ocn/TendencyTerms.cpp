@@ -205,20 +205,19 @@ void TracerHorzAdvOnCell::init() {
              ActiveTracerHorizontalAdvectionEdgeFlux.label(), Mesh->MeshName);
          const std::string CellFieldName = "BudgetAdvectionTendency";
          std::vector<std::string> TendDimNames(NDims, "NCells");
-         auto
-             BudgetAdvectionCellTend =
-                 Field::create(CellFieldName, // field name
-                               "Tracer FCT Horizontal Advection Cell Flux "
-                               "Tendency", // long name or description
-                               "",         // units
-                               "",         // CF standard Name
-                               0,          // min valid value
-                               std::numeric_limits<I4>::max(), // max valid
-                                                               // value
-                               FillValueReal, // scalar for undefined entries
-                               NDims,         // number of dimensions
-                               TendDimNames   // dimension names
-                 );
+         auto BudgetAdvectionCellTend =
+             Field::create(CellFieldName, // field name
+                           "Tracer FCT Horizontal Advection Cell Flux "
+                           "Tendency", // long name or description
+                           "",         // units
+                           "",         // CF standard Name
+                           0,          // min valid value
+                           std::numeric_limits<I4>::max(), // max valid
+                                                           // value
+                           FillValueReal, // scalar for undefined entries
+                           NDims,         // number of dimensions
+                           TendDimNames   // dimension names
+             );
          BudgetAdvectionCellTend->attachData<Array3DReal>(
              ActiveTracerHorizontalAdvectionTendency);
          FieldGroup::addFieldToGroup(
